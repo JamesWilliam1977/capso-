@@ -7,6 +7,7 @@ options:
   xcodeVersion: "26.0"
   generateEmptyDirectories: true
   groupSortPosition: top
+  defaultLocalization: en
 
 settings:
   base:
