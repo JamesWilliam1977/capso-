@@ -191,6 +191,11 @@ public final class AppSettings: @unchecked Sendable {
     }
 
     // MARK: Screenshots
+    public var screenshotAutoCopy: Bool {
+        get { defaults.object(forKey: "screenshotAutoCopy") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "screenshotAutoCopy") }
+    }
+
     public var captureWindowShadow: Bool {
         get { defaults.object(forKey: "captureWindowShadow") as? Bool ?? true }
         set { defaults.set(newValue, forKey: "captureWindowShadow") }

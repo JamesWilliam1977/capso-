@@ -205,6 +205,20 @@
         "ko": { "stringUnit": { "state": "translated", "value": "↘ 오른쪽 아래" } }
       }
     },
+    "Auto Copy to Clipboard": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "自动复制到剪贴板" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "クリップボードに自動コピー" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "클립보드에 자동 복사" } }
+      }
+    },
+    "Copy screenshot immediately after capture": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "截图后立即复制到剪贴板" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "キャプチャ後すぐにクリップボードにコピー" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "캡처 직후 클립보드에 복사" } }
+      }
+    },
     "Auto-Close": {
       "localizations": {
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "自动关闭" } },

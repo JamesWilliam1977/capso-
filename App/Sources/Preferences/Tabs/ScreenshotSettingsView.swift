@@ -12,7 +12,12 @@ struct ScreenshotSettingsView: View {
 
             SettingGroup(title: "Capture") {
                 SettingCard {
-                    SettingRow(label: "Capture Window Shadow", sublabel: "Include shadow in window captures") {
+                    SettingRow(label: "Auto Copy to Clipboard", sublabel: "Copy screenshot immediately after capture") {
+                        Toggle("", isOn: $viewModel.screenshotAutoCopy)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                    }
+                    SettingRow(label: "Capture Window Shadow", sublabel: "Include shadow in window captures", showDivider: true) {
                         Toggle("", isOn: $viewModel.captureWindowShadow)
                             .toggleStyle(.switch)
                             .controlSize(.small)

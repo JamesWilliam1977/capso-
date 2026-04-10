@@ -23,6 +23,10 @@ final class PreferencesViewModel {
     }
 
     // MARK: Screenshots
+    var screenshotAutoCopy: Bool {
+        get { settings.screenshotAutoCopy }
+        set { settings.screenshotAutoCopy = newValue }
+    }
     var screenshotFormat: ScreenshotFormat {
         get { settings.screenshotFormat }
         set { settings.screenshotFormat = newValue }

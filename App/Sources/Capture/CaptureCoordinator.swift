@@ -149,6 +149,9 @@ final class CaptureCoordinator {
             Self.shutterSound?.stop()
             Self.shutterSound?.play()
         }
+        if settings.screenshotAutoCopy {
+            copyImageToClipboard(result.image)
+        }
         showQuickAccess(for: result)
     }
 
