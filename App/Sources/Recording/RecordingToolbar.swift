@@ -138,6 +138,10 @@ struct RecordingToolbarView: View {
                 .stroke(.white.opacity(0.1), lineWidth: 0.5)
         )
         .shadow(color: .black.opacity(0.5), radius: 12, y: 6)
+        // Force dark appearance so `.white` always resolves to true
+        // white — the toolbar has a dark background regardless of the
+        // system color scheme.
+        .environment(\.colorScheme, .dark)
     }
 
     // MARK: - Mic Menu
