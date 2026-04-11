@@ -152,7 +152,12 @@ final class CaptureCoordinator {
         if settings.screenshotAutoCopy {
             copyImageToClipboard(result.image)
         }
-        showQuickAccess(for: result)
+        if settings.screenshotAutoSave {
+            saveImageToFile(result.image)
+        }
+        if settings.screenshotShowPreview {
+            showQuickAccess(for: result)
+        }
     }
 
     /// The real camera-shutter sound macOS itself plays for Cmd+Shift+3/4.

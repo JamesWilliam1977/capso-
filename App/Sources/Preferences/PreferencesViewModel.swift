@@ -14,126 +14,333 @@ final class PreferencesViewModel {
 
     // MARK: General
     var playShutterSound: Bool {
-        get { settings.playShutterSound }
-        set { settings.playShutterSound = newValue }
+        get {
+            access(keyPath: \.playShutterSound)
+            return settings.playShutterSound
+        }
+        set {
+            withMutation(keyPath: \.playShutterSound) {
+                settings.playShutterSound = newValue
+            }
+        }
     }
     var showMenuBarIcon: Bool {
-        get { settings.showMenuBarIcon }
-        set { settings.showMenuBarIcon = newValue }
+        get {
+            access(keyPath: \.showMenuBarIcon)
+            return settings.showMenuBarIcon
+        }
+        set {
+            withMutation(keyPath: \.showMenuBarIcon) {
+                settings.showMenuBarIcon = newValue
+            }
+        }
     }
 
     // MARK: Screenshots
+    var screenshotShowPreview: Bool {
+        get {
+            access(keyPath: \.screenshotShowPreview)
+            return settings.screenshotShowPreview
+        }
+        set {
+            withMutation(keyPath: \.screenshotShowPreview) {
+                settings.screenshotShowPreview = newValue
+            }
+        }
+    }
     var screenshotAutoCopy: Bool {
-        get { settings.screenshotAutoCopy }
-        set { settings.screenshotAutoCopy = newValue }
+        get {
+            access(keyPath: \.screenshotAutoCopy)
+            return settings.screenshotAutoCopy
+        }
+        set {
+            withMutation(keyPath: \.screenshotAutoCopy) {
+                settings.screenshotAutoCopy = newValue
+            }
+        }
+    }
+    var screenshotAutoSave: Bool {
+        get {
+            access(keyPath: \.screenshotAutoSave)
+            return settings.screenshotAutoSave
+        }
+        set {
+            withMutation(keyPath: \.screenshotAutoSave) {
+                settings.screenshotAutoSave = newValue
+            }
+        }
     }
     var screenshotFormat: ScreenshotFormat {
-        get { settings.screenshotFormat }
-        set { settings.screenshotFormat = newValue }
+        get {
+            access(keyPath: \.screenshotFormat)
+            return settings.screenshotFormat
+        }
+        set {
+            withMutation(keyPath: \.screenshotFormat) {
+                settings.screenshotFormat = newValue
+            }
+        }
     }
     var captureWindowShadow: Bool {
-        get { settings.captureWindowShadow }
-        set { settings.captureWindowShadow = newValue }
+        get {
+            access(keyPath: \.captureWindowShadow)
+            return settings.captureWindowShadow
+        }
+        set {
+            withMutation(keyPath: \.captureWindowShadow) {
+                settings.captureWindowShadow = newValue
+            }
+        }
     }
     var freezeScreen: Bool {
-        get { settings.freezeScreen }
-        set { settings.freezeScreen = newValue }
+        get {
+            access(keyPath: \.freezeScreen)
+            return settings.freezeScreen
+        }
+        set {
+            withMutation(keyPath: \.freezeScreen) {
+                settings.freezeScreen = newValue
+            }
+        }
     }
     var showMagnifier: Bool {
-        get { settings.showMagnifier }
-        set { settings.showMagnifier = newValue }
+        get {
+            access(keyPath: \.showMagnifier)
+            return settings.showMagnifier
+        }
+        set {
+            withMutation(keyPath: \.showMagnifier) {
+                settings.showMagnifier = newValue
+            }
+        }
     }
     var rememberLastCaptureArea: Bool {
-        get { settings.rememberLastCaptureArea }
-        set { settings.rememberLastCaptureArea = newValue }
+        get {
+            access(keyPath: \.rememberLastCaptureArea)
+            return settings.rememberLastCaptureArea
+        }
+        set {
+            withMutation(keyPath: \.rememberLastCaptureArea) {
+                settings.rememberLastCaptureArea = newValue
+            }
+        }
     }
 
     // MARK: Recording
     var recordingFormat: RecordingFormat {
-        get { settings.recordingFormat }
-        set { settings.recordingFormat = newValue }
+        get {
+            access(keyPath: \.recordingFormat)
+            return settings.recordingFormat
+        }
+        set {
+            withMutation(keyPath: \.recordingFormat) {
+                settings.recordingFormat = newValue
+            }
+        }
     }
     var showCursor: Bool {
-        get { settings.showCursor }
-        set { settings.showCursor = newValue }
+        get {
+            access(keyPath: \.showCursor)
+            return settings.showCursor
+        }
+        set {
+            withMutation(keyPath: \.showCursor) {
+                settings.showCursor = newValue
+            }
+        }
     }
     var highlightClicks: Bool {
-        get { settings.highlightClicks }
-        set { settings.highlightClicks = newValue }
+        get {
+            access(keyPath: \.highlightClicks)
+            return settings.highlightClicks
+        }
+        set {
+            withMutation(keyPath: \.highlightClicks) {
+                settings.highlightClicks = newValue
+            }
+        }
     }
     var cursorSmoothing: Bool {
-        get { settings.cursorSmoothing }
-        set { settings.cursorSmoothing = newValue }
+        get {
+            access(keyPath: \.cursorSmoothing)
+            return settings.cursorSmoothing
+        }
+        set {
+            withMutation(keyPath: \.cursorSmoothing) {
+                settings.cursorSmoothing = newValue
+            }
+        }
     }
     var showCountdown: Bool {
-        get { settings.showCountdown }
-        set { settings.showCountdown = newValue }
+        get {
+            access(keyPath: \.showCountdown)
+            return settings.showCountdown
+        }
+        set {
+            withMutation(keyPath: \.showCountdown) {
+                settings.showCountdown = newValue
+            }
+        }
     }
     var dimScreenWhileRecording: Bool {
-        get { settings.dimScreenWhileRecording }
-        set { settings.dimScreenWhileRecording = newValue }
+        get {
+            access(keyPath: \.dimScreenWhileRecording)
+            return settings.dimScreenWhileRecording
+        }
+        set {
+            withMutation(keyPath: \.dimScreenWhileRecording) {
+                settings.dimScreenWhileRecording = newValue
+            }
+        }
     }
     var rememberLastRecordingArea: Bool {
-        get { settings.rememberLastRecordingArea }
-        set { settings.rememberLastRecordingArea = newValue }
+        get {
+            access(keyPath: \.rememberLastRecordingArea)
+            return settings.rememberLastRecordingArea
+        }
+        set {
+            withMutation(keyPath: \.rememberLastRecordingArea) {
+                settings.rememberLastRecordingArea = newValue
+            }
+        }
     }
 
     // MARK: Camera
     var cameraShape: CameraShape {
-        get { settings.cameraShape }
-        set { settings.cameraShape = newValue }
+        get {
+            access(keyPath: \.cameraShape)
+            return settings.cameraShape
+        }
+        set {
+            withMutation(keyPath: \.cameraShape) {
+                settings.cameraShape = newValue
+            }
+        }
     }
     var cameraSize: CameraSize {
-        get { settings.cameraSize }
-        set { settings.cameraSize = newValue }
+        get {
+            access(keyPath: \.cameraSize)
+            return settings.cameraSize
+        }
+        set {
+            withMutation(keyPath: \.cameraSize) {
+                settings.cameraSize = newValue
+            }
+        }
     }
     var cameraMirror: Bool {
-        get { settings.cameraMirror }
-        set { settings.cameraMirror = newValue }
+        get {
+            access(keyPath: \.cameraMirror)
+            return settings.cameraMirror
+        }
+        set {
+            withMutation(keyPath: \.cameraMirror) {
+                settings.cameraMirror = newValue
+            }
+        }
     }
     var cameraCustomSizePt: Double {
-        get { settings.cameraCustomSizePt }
-        set { settings.cameraCustomSizePt = newValue }
+        get {
+            access(keyPath: \.cameraCustomSizePt)
+            return settings.cameraCustomSizePt
+        }
+        set {
+            withMutation(keyPath: \.cameraCustomSizePt) {
+                settings.cameraCustomSizePt = newValue
+            }
+        }
     }
 
     // MARK: Quick Access
     var quickAccessPosition: QuickAccessPosition {
-        get { settings.quickAccessPosition }
-        set { settings.quickAccessPosition = newValue }
+        get {
+            access(keyPath: \.quickAccessPosition)
+            return settings.quickAccessPosition
+        }
+        set {
+            withMutation(keyPath: \.quickAccessPosition) {
+                settings.quickAccessPosition = newValue
+            }
+        }
     }
     var quickAccessAutoClose: Bool {
-        get { settings.quickAccessAutoClose }
-        set { settings.quickAccessAutoClose = newValue }
+        get {
+            access(keyPath: \.quickAccessAutoClose)
+            return settings.quickAccessAutoClose
+        }
+        set {
+            withMutation(keyPath: \.quickAccessAutoClose) {
+                settings.quickAccessAutoClose = newValue
+            }
+        }
     }
     var quickAccessAutoCloseInterval: Int {
-        get { settings.quickAccessAutoCloseInterval }
-        set { settings.quickAccessAutoCloseInterval = newValue }
+        get {
+            access(keyPath: \.quickAccessAutoCloseInterval)
+            return settings.quickAccessAutoCloseInterval
+        }
+        set {
+            withMutation(keyPath: \.quickAccessAutoCloseInterval) {
+                settings.quickAccessAutoCloseInterval = newValue
+            }
+        }
     }
 
     // MARK: Export
     var exportQuality: ExportQuality {
-        get { settings.exportQuality }
-        set { settings.exportQuality = newValue }
+        get {
+            access(keyPath: \.exportQuality)
+            return settings.exportQuality
+        }
+        set {
+            withMutation(keyPath: \.exportQuality) {
+                settings.exportQuality = newValue
+            }
+        }
     }
     var exportLocation: URL {
-        settings.exportLocation
+        access(keyPath: \.exportLocation)
+        return settings.exportLocation
     }
     func setExportLocation(_ url: URL) {
-        settings.setExportLocation(url)
+        withMutation(keyPath: \.exportLocation) {
+            settings.setExportLocation(url)
+        }
     }
 
     // MARK: OCR
     var ocrKeepLineBreaks: Bool {
-        get { settings.ocrKeepLineBreaks }
-        set { settings.ocrKeepLineBreaks = newValue }
+        get {
+            access(keyPath: \.ocrKeepLineBreaks)
+            return settings.ocrKeepLineBreaks
+        }
+        set {
+            withMutation(keyPath: \.ocrKeepLineBreaks) {
+                settings.ocrKeepLineBreaks = newValue
+            }
+        }
     }
     var ocrDetectLinks: Bool {
-        get { settings.ocrDetectLinks }
-        set { settings.ocrDetectLinks = newValue }
+        get {
+            access(keyPath: \.ocrDetectLinks)
+            return settings.ocrDetectLinks
+        }
+        set {
+            withMutation(keyPath: \.ocrDetectLinks) {
+                settings.ocrDetectLinks = newValue
+            }
+        }
     }
     var ocrPrimaryLanguage: String? {
-        get { settings.ocrPrimaryLanguage }
-        set { settings.ocrPrimaryLanguage = newValue }
+        get {
+            access(keyPath: \.ocrPrimaryLanguage)
+            return settings.ocrPrimaryLanguage
+        }
+        set {
+            withMutation(keyPath: \.ocrPrimaryLanguage) {
+                settings.ocrPrimaryLanguage = newValue
+            }
+        }
     }
 
     // MARK: Version
