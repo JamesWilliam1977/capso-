@@ -8,22 +8,6 @@ import SharedKit
 
 private let logger = Logger(subsystem: "com.awesomemacapps.capso", category: "OCR")
 
-private func logToFile(_ message: String) {
-    let url = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Desktop/capso-ocr.log")
-    let timestamp = ISO8601DateFormatter().string(from: Date())
-    let line = "[\(timestamp)] \(message)\n"
-    if FileManager.default.fileExists(atPath: url.path) {
-        if let handle = try? FileHandle(forWritingTo: url) {
-            handle.seekToEndOfFile()
-            handle.write(line.data(using: .utf8)!)
-            handle.closeFile()
-        }
-    } else {
-        try? line.data(using: .utf8)?.write(to: url)
-    }
-}
-
 @MainActor
 @Observable
 final class OCRCoordinator {
@@ -84,22 +68,18 @@ final class OCRCoordinator {
                     height: rect.height
                 )
                 let displayID = screen.displayID
-                logToFile("performInstantOCR START")
-                logToFile("  selection rect (view-local): \(rect)")
-                logToFile("  screen.frame: \(screenFrame)")
-                logToFile("  screenRect (for SCKit): \(screenRect)")
-                logToFile("  displayID: \(displayID)")
+
                 let result = try await ScreenCaptureManager.captureArea(
                     rect: screenRect,
                     displayID: displayID
                 )
-                logToFile("  capture OK: \(result.image.width)x\(result.image.height)")
+
 
                 let text = try await TextRecognizer.recognizeText(
                     image: result.image,
                     keepLineBreaks: settings.ocrKeepLineBreaks
                 )
-                logToFile("  OCR result: \(text.count) chars")
+
 
                 if text.isEmpty {
                     showToast("No text detected", icon: "info.circle.fill", iconColor: .systemYellow, screen: screen)
@@ -110,8 +90,7 @@ final class OCRCoordinator {
                     showToast("Copied \(text.count) characters", screen: screen)
                 }
             } catch {
-                logToFile("  FAILED: \(error)")
-                logToFile("  error.localizedDescription: \(error.localizedDescription)")
+
                 showToast("OCR: \(error.localizedDescription)", icon: "xmark.circle.fill", iconColor: .systemRed, screen: screen)
             }
         }

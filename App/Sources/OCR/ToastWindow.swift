@@ -26,7 +26,7 @@ final class ToastWindow: NSPanel {
         self.level = .floating
         self.isOpaque = false
         self.backgroundColor = .clear
-        self.hasShadow = true
+        self.hasShadow = false
         self.collectionBehavior = [.canJoinAllSpaces, .transient]
         self.isMovableByWindowBackground = false
         self.animationBehavior = .utilityWindow
