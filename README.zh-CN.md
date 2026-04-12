@@ -192,6 +192,7 @@ swift test --package-path Packages/AnnotationKit
 ## 路线图
 
 - 聚光灯、放大镜、标尺、图片叠加等标注工具
+- 文字标注支持 Emoji 和自定义字体
 - 截图历史浏览器
 - 视频剪辑编辑器
 - 光标平滑（弹簧物理）

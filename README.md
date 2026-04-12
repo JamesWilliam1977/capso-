@@ -190,6 +190,7 @@ The package split means you can embed, for example, `CaptureKit` or `AnnotationK
 ## Roadmap
 
 - Spotlight, magnifier, ruler, image overlay annotation tools
+- Emoji support and custom fonts in text annotations
 - Screenshot history browser
 - Video trimmer/editor
 - Cursor smoothing (spring-physics during export)
