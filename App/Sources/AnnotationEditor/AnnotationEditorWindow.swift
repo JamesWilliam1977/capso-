@@ -40,6 +40,9 @@ final class AnnotationEditorWindow: NSPanel {
         self.isReleasedWhenClosed = false
         // Use .normal level so the window stays visible when app loses focus
         self.level = .normal
+        // Keep the panel visible when the app loses focus — without this,
+        // clicking another app's window hides the annotation editor.
+        self.hidesOnDeactivate = false
         // Ensure tooltip tracking and key-window behaviour work correctly.
         self.becomesKeyOnlyIfNeeded = false
         self.acceptsMouseMovedEvents = true
