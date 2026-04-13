@@ -34,12 +34,14 @@ final class CaptureCoordinator {
     }
 
     func captureArea() {
-        // Small delay to let the menu bar dropdown fully dismiss
-        // before showing the capture overlay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
-            if self?.settings.freezeScreen == true {
-                self?.showFrozenOverlay()
-            } else {
+        if settings.freezeScreen {
+            // Freeze screen: synchronously capture all screens FIRST (preserving
+            // dropdowns/popups), then show overlay with frozen image as background.
+            // No delay — must be instant before anything can dismiss.
+            showFrozenOverlay()
+        } else {
+            // Non-frozen: small delay to let menu bar dropdown dismiss
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
                 self?.showOverlay()
             }
         }
@@ -119,56 +121,60 @@ final class CaptureCoordinator {
         }
     }
 
-    /// Freeze screen: capture each screen first, then show overlay with the frozen
-    /// image as background. User selects area on the frozen snapshot, and we crop
-    /// from the pre-captured image. This preserves dropdown menus/popups that would
-    /// otherwise dismiss when the overlay window appears.
+    /// Freeze screen: synchronously capture each display using CGDisplayCreateImage
+    /// (same approach as CleanShot X's Freezer), then show overlay with the frozen
+    /// image as background. Must be synchronous — any async gap lets dropdowns dismiss.
     private func showFrozenOverlay() {
         dismissOverlay()
-        Task {
-            // Pre-capture all screens before showing any overlay
-            var frozenScreens: [(NSScreen, CGImage)] = []
-            for screen in NSScreen.screens {
-                do {
-                    let result = try await ScreenCaptureManager.captureFullscreen(displayID: screen.displayID)
-                    frozenScreens.append((screen, result.image))
-                } catch {
-                    print("Failed to freeze screen \(screen.displayID): \(error)")
-                }
-            }
 
-            // Now show overlays with frozen backgrounds
-            for (screen, frozenImage) in frozenScreens {
-                let overlay = CaptureOverlayWindow(screen: screen)
-                overlay.setFrozenBackground(frozenImage)
-                overlay.onAreaSelected = { [weak self] rect, screen in
-                    self?.dismissOverlay()
-                    // Crop from the frozen image instead of live capture
-                    let screenFrame = screen.frame
-                    let scaleX = CGFloat(frozenImage.width) / screenFrame.width
-                    let scaleY = CGFloat(frozenImage.height) / screenFrame.height
-                    let cropRect = CGRect(
-                        x: rect.origin.x * scaleX,
-                        y: (screenFrame.height - rect.origin.y - rect.height) * scaleY,
-                        width: rect.width * scaleX,
-                        height: rect.height * scaleY
-                    )
-                    if let cropped = frozenImage.cropping(to: cropRect) {
-                        let result = CaptureResult(
-                            image: cropped,
-                            mode: .area,
-                            captureRect: rect,
-                            displayID: screen.displayID
-                        )
-                        self?.handleCaptureResult(result)
-                    }
-                }
-                overlay.onCancelled = { [weak self] in
-                    self?.dismissOverlay()
-                }
-                overlay.activate(mode: .area)
-                overlayWindows.append(overlay)
+        // Synchronously capture all screens BEFORE showing any window.
+        // CGDisplayCreateImage is deprecated but still functional and is the only
+        // synchronous full-screen capture API available. Both CleanShot X and Shottr
+        // use it for exactly this purpose.
+        var frozenScreens: [(NSScreen, CGImage)] = []
+        for screen in NSScreen.screens {
+            if let image = Self.syncCaptureDisplay(screen.displayID) {
+                frozenScreens.append((screen, image))
             }
+        }
+
+        guard !frozenScreens.isEmpty else {
+            // Fallback to non-frozen overlay if sync capture failed
+            showOverlay()
+            return
+        }
+
+        // Now show overlays — dropdowns may dismiss at this point, but we
+        // already have them captured in the frozen images
+        for (screen, frozenImage) in frozenScreens {
+            let overlay = CaptureOverlayWindow(screen: screen)
+            overlay.setFrozenBackground(frozenImage)
+            overlay.onAreaSelected = { [weak self] rect, screen in
+                self?.dismissOverlay()
+                let screenFrame = screen.frame
+                let scaleX = CGFloat(frozenImage.width) / screenFrame.width
+                let scaleY = CGFloat(frozenImage.height) / screenFrame.height
+                let cropRect = CGRect(
+                    x: rect.origin.x * scaleX,
+                    y: (screenFrame.height - rect.origin.y - rect.height) * scaleY,
+                    width: rect.width * scaleX,
+                    height: rect.height * scaleY
+                )
+                if let cropped = frozenImage.cropping(to: cropRect) {
+                    let result = CaptureResult(
+                        image: cropped,
+                        mode: .area,
+                        captureRect: rect,
+                        displayID: screen.displayID
+                    )
+                    self?.handleCaptureResult(result)
+                }
+            }
+            overlay.onCancelled = { [weak self] in
+                self?.dismissOverlay()
+            }
+            overlay.activate(mode: .area)
+            overlayWindows.append(overlay)
         }
     }
 
@@ -625,6 +631,23 @@ final class CaptureCoordinator {
 
     private func copyRenderedImage(_ image: CGImage) {
         copyImageToClipboard(image)
+    }
+
+    // MARK: - Synchronous Display Capture
+
+    /// Synchronously capture a display using CGDisplayCreateImage.
+    /// This is the same API used by CleanShot X and Shottr for freeze-screen.
+    /// It's deprecated in macOS 14+ but still functional — loaded via dlsym
+    /// to bypass the compile-time unavailability annotation.
+    private static func syncCaptureDisplay(_ displayID: CGDirectDisplayID) -> CGImage? {
+        typealias CGDisplayCreateImageFunc = @convention(c) (CGDirectDisplayID) -> CGImage?
+        guard let handle = dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics", RTLD_LAZY),
+              let sym = dlsym(handle, "CGDisplayCreateImage") else {
+            return nil
+        }
+        defer { dlclose(handle) }
+        let fn = unsafeBitCast(sym, to: CGDisplayCreateImageFunc.self)
+        return fn(displayID)
     }
 }
 
