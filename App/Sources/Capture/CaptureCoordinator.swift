@@ -23,6 +23,8 @@ final class CaptureCoordinator {
     private let maxQuickAccessStackSize = 5
     private var annotationWindow: AnnotationEditorWindow?
     private var pinnedControllers: [PinnedScreenshotController] = []
+    /// Opaque freeze-screen windows (one per display) that replace the live desktop
+    private var freezeWindows: [NSWindow] = []
     private var scrollCaptureController: ScrollCaptureController?
     private var scrollCaptureOverlay: ScrollCaptureOverlay?
 
@@ -121,37 +123,57 @@ final class CaptureCoordinator {
         }
     }
 
-    /// Freeze screen: synchronously capture each display using CGDisplayCreateImage
-    /// (same approach as CleanShot X's Freezer), then show overlay with the frozen
-    /// image as background. Must be synchronous — any async gap lets dropdowns dismiss.
+    /// Two-window freeze architecture (same as CleanShot X's FSWindow + FSOverlay):
+    ///
+    /// 1. Bottom window: OPAQUE, shows frozen image, completely replaces the
+    ///    live desktop. isOpaque=true means no compositing with what's behind
+    ///    → no sub-pixel mismatch → no shaking. Pre-rendered before showing.
+    ///
+    /// 2. Top window: TRANSPARENT overlay for crosshair + selection + dark tint.
+    ///    Drawn on top of the frozen window, not on the live desktop.
     private func showFrozenOverlay() {
         dismissOverlay()
 
-        // Synchronously capture all screens BEFORE showing any window.
-        // CGDisplayCreateImage is deprecated but still functional and is the only
-        // synchronous full-screen capture API available. Both CleanShot X and Shottr
-        // use it for exactly this purpose.
         var frozenScreens: [(NSScreen, CGImage)] = []
         for screen in NSScreen.screens {
             if let image = Self.syncCaptureDisplay(screen.displayID) {
                 frozenScreens.append((screen, image))
-                print("[FreezeScreen] Captured display \(screen.displayID): \(image.width)x\(image.height)")
-            } else {
-                print("[FreezeScreen] CGDisplayCreateImage FAILED for display \(screen.displayID)")
             }
         }
 
         guard !frozenScreens.isEmpty else {
-            print("[FreezeScreen] No screens captured, falling back to live overlay")
             showOverlay()
             return
         }
 
-        // Now show overlays — dropdowns may dismiss at this point, but we
-        // already have them captured in the frozen images
+        // Step 1: Create opaque freeze windows (bottom layer)
+        for (screen, frozenImage) in frozenScreens {
+            let freezeWin = NSWindow(
+                contentRect: screen.frame,
+                styleMask: [.borderless],
+                backing: .buffered,
+                defer: false
+            )
+            freezeWin.level = .screenSaver - 1
+            freezeWin.isOpaque = true
+            freezeWin.hasShadow = false
+            freezeWin.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+            freezeWin.hidesOnDeactivate = false
+
+            let imageView = NSImageView(frame: NSRect(origin: .zero, size: screen.frame.size))
+            imageView.image = NSImage(cgImage: frozenImage, size: screen.frame.size)
+            imageView.imageScaling = .scaleAxesIndependently
+            freezeWin.contentView = imageView
+
+            // Pre-render and show
+            freezeWin.displayIfNeeded()
+            freezeWin.orderFrontRegardless()
+            freezeWindows.append(freezeWin)
+        }
+
+        // Step 2: Create transparent overlay windows (top layer) for selection
         for (screen, frozenImage) in frozenScreens {
             let overlay = CaptureOverlayWindow(screen: screen)
-            overlay.setFrozenBackground(frozenImage)
             overlay.onAreaSelected = { [weak self] rect, screen in
                 self?.dismissOverlay()
                 let screenFrame = screen.frame
@@ -340,6 +362,10 @@ final class CaptureCoordinator {
             window.deactivate()
         }
         overlayWindows.removeAll()
+        for window in freezeWindows {
+            window.orderOut(nil)
+        }
+        freezeWindows.removeAll()
     }
 
     // MARK: - Scrolling Capture

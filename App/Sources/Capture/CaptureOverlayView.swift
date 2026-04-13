@@ -109,20 +109,19 @@ final class CaptureOverlayView: NSView {
     }
 
     private func drawAreaMode(in context: CGContext) {
-        // Draw frozen background if available (freeze screen mode)
-        if let frozenBackground {
-            // CGContext is flipped (bottom-left origin), CGImage draws correctly
-            context.draw(frozenBackground, in: bounds)
-        }
-
-        // Fill overlay (semi-transparent dark layer on top)
-        context.setFillColor(overlayColor.cgColor)
-        context.fill(bounds)
+        // This overlay is transparent. In freeze-screen mode, an opaque
+        // window below shows the frozen image. This overlay only draws
+        // the crosshair, dark tint, and selection border.
 
         if isDragging {
             let selectionRect = self.selectionRect
 
-            // Clear selected area
+            // Dark overlay on entire screen
+            context.setFillColor(overlayColor.cgColor)
+            context.fill(bounds)
+
+            // Clear the selection area to show what's below
+            // (either the frozen image window or the live desktop)
             context.setBlendMode(.clear)
             context.fill(selectionRect)
             context.setBlendMode(.normal)
@@ -132,13 +131,10 @@ final class CaptureOverlayView: NSView {
             context.setLineWidth(1.0)
             context.stroke(selectionRect)
 
-            // Dimension label below selection
             drawDimensionLabel(for: selectionRect, in: context)
-
-            // Small crosshair reticle at drag endpoint
             drawReticle(at: currentMouseLocation, in: context)
         } else {
-            // Before dragging: small crosshair reticle + coordinate label
+            // Before dragging: fully transparent, just crosshair
             drawReticle(at: currentMouseLocation, in: context)
             drawCoordinateLabel(at: currentMouseLocation, in: context)
         }
@@ -252,32 +248,34 @@ final class CaptureOverlayView: NSView {
     /// Draw a small crosshair reticle at the cursor position.
     /// Short arms (~18px) with a gap in the center — no full-screen lines.
     private func drawReticle(at point: NSPoint, in context: CGContext) {
-        let armLength: CGFloat = 18
-        let gap: CGFloat = 4 // gap around center so the exact pixel is visible
-        let color = NSColor.white.withAlphaComponent(0.9).cgColor
+        let armLength: CGFloat = 20
+        let gap: CGFloat = 4
 
-        context.setStrokeColor(color)
-        context.setLineWidth(1.0)
+        // Draw each arm with dark outline + white fill for visibility on any background
+        let arms: [(CGPoint, CGPoint)] = [
+            (CGPoint(x: point.x, y: point.y + gap), CGPoint(x: point.x, y: point.y + gap + armLength)),
+            (CGPoint(x: point.x, y: point.y - gap), CGPoint(x: point.x, y: point.y - gap - armLength)),
+            (CGPoint(x: point.x + gap, y: point.y), CGPoint(x: point.x + gap + armLength, y: point.y)),
+            (CGPoint(x: point.x - gap, y: point.y), CGPoint(x: point.x - gap - armLength, y: point.y)),
+        ]
 
-        // Top arm
-        context.move(to: CGPoint(x: point.x, y: point.y + gap))
-        context.addLine(to: CGPoint(x: point.x, y: point.y + gap + armLength))
-        context.strokePath()
+        // Dark outline (draw first, thicker)
+        context.setStrokeColor(NSColor.black.withAlphaComponent(0.5).cgColor)
+        context.setLineWidth(3.0)
+        for (start, end) in arms {
+            context.move(to: start)
+            context.addLine(to: end)
+            context.strokePath()
+        }
 
-        // Bottom arm
-        context.move(to: CGPoint(x: point.x, y: point.y - gap))
-        context.addLine(to: CGPoint(x: point.x, y: point.y - gap - armLength))
-        context.strokePath()
-
-        // Right arm
-        context.move(to: CGPoint(x: point.x + gap, y: point.y))
-        context.addLine(to: CGPoint(x: point.x + gap + armLength, y: point.y))
-        context.strokePath()
-
-        // Left arm
-        context.move(to: CGPoint(x: point.x - gap, y: point.y))
-        context.addLine(to: CGPoint(x: point.x - gap - armLength, y: point.y))
-        context.strokePath()
+        // White fill (draw on top, thinner)
+        context.setStrokeColor(NSColor.white.cgColor)
+        context.setLineWidth(1.5)
+        for (start, end) in arms {
+            context.move(to: start)
+            context.addLine(to: end)
+            context.strokePath()
+        }
     }
 
     /// Draw coordinate label near the cursor (before dragging starts).

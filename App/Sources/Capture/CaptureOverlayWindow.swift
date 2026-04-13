@@ -9,7 +9,8 @@ final class CaptureOverlayWindow: NSPanel {
     var onCancelled: (() -> Void)?
 
     private var overlayView: CaptureOverlayView!
-    private var escMonitor: Any?
+    private var globalEscMonitor: Any?
+    private var localEscMonitor: Any?
 
     init(screen: NSScreen) {
         super.init(
@@ -27,11 +28,9 @@ final class CaptureOverlayWindow: NSPanel {
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         self.isMovable = false
         self.acceptsMouseMovedEvents = true
-        self.becomesKeyOnlyIfNeeded = true
         self.hidesOnDeactivate = false
 
-        // Prevent this window from causing app activation changes.
-        // Same technique used by CleanShot X's Freezer class.
+        // Prevent this window from causing app activation changes
         let preventsActivationSel = NSSelectorFromString("_setPreventsActivation:")
         if responds(to: preventsActivationSel) {
             perform(preventsActivationSel, with: NSNumber(value: true))
@@ -52,40 +51,71 @@ final class CaptureOverlayWindow: NSPanel {
         self.contentView = overlayView
     }
 
-    // Don't become main window — reduces activation side effects
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
     func activate(mode: CaptureOverlayMode = .area) {
-        orderFrontRegardless()
         overlayView.setMode(mode)
         overlayView.resetSelection()
 
-        // Handle keyboard (ESC) via event monitor instead of first responder,
-        // so we don't need to make the window key
+        // Force synchronous render BEFORE showing the window.
+        // This eliminates the flash — the first visible frame already
+        // has the frozen image + dark overlay drawn.
+        overlayView.displayIfNeeded()
+
+        // Show the window. Non-activating panel won't activate our app.
+        orderFrontRegardless()
+
+        // Make this window key so it receives keyboard events (ESC).
+        // On a .nonactivatingPanel, makeKey() does NOT activate the app.
+        makeKey()
+        makeFirstResponder(overlayView)
+
+        // Also install global ESC monitor as fallback
+        // (in case the window doesn't receive key events)
         installEscMonitor()
     }
 
     func setFrozenBackground(_ image: CGImage) {
         overlayView.frozenBackground = image
+        // Pre-render the frozen image into the view's backing store
+        overlayView.needsDisplay = true
+        overlayView.displayIfNeeded()
     }
 
     func deactivate() {
         overlayView.restoreCursorIfNeeded()
-        if let escMonitor {
-            NSEvent.removeMonitor(escMonitor)
-            self.escMonitor = nil
-        }
+        removeEscMonitor()
         orderOut(nil)
     }
 
     private func installEscMonitor() {
-        escMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            if event.keyCode == 53 { // ESC
+        // Global monitor: catches ESC even when another app is frontmost
+        globalEscMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
+                DispatchQueue.main.async {
+                    self?.onCancelled?()
+                }
+            }
+        }
+        // Local monitor: catches ESC when our window is key
+        localEscMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if event.keyCode == 53 {
                 self?.onCancelled?()
                 return nil
             }
             return event
+        }
+    }
+
+    private func removeEscMonitor() {
+        if let globalEscMonitor {
+            NSEvent.removeMonitor(globalEscMonitor)
+            self.globalEscMonitor = nil
+        }
+        if let localEscMonitor {
+            NSEvent.removeMonitor(localEscMonitor)
+            self.localEscMonitor = nil
         }
     }
 }
