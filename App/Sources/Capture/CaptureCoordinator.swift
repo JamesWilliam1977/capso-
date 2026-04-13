@@ -362,10 +362,24 @@ final class CaptureCoordinator {
             window.deactivate()
         }
         overlayWindows.removeAll()
-        for window in freezeWindows {
-            window.orderOut(nil)
-        }
+
+        // Fade out freeze windows smoothly instead of instant removal
+        let windows = freezeWindows
         freezeWindows.removeAll()
+        if windows.isEmpty { return }
+
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.15
+            for window in windows {
+                window.animator().alphaValue = 0
+            }
+        }
+        // Clean up after animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            for window in windows {
+                window.orderOut(nil)
+            }
+        }
     }
 
     // MARK: - Scrolling Capture
