@@ -2,17 +2,16 @@
 import AppKit
 import SwiftUI
 import SharedKit
-import Sparkle
 
 @MainActor
 final class PreferencesWindow {
     private var window: NSWindow?
     private let settings: AppSettings
-    private let updater: SPUUpdater?
+    private let updateManager: UpdateManager?
 
-    init(settings: AppSettings, updater: SPUUpdater? = nil) {
+    init(settings: AppSettings, updateManager: UpdateManager? = nil) {
         self.settings = settings
-        self.updater = updater
+        self.updateManager = updateManager
     }
 
     func show() {
@@ -42,7 +41,7 @@ final class PreferencesWindow {
         window.contentView = visualEffect
 
         let viewModel = PreferencesViewModel(settings: settings)
-        let hostingView = NSHostingView(rootView: PreferencesView(viewModel: viewModel, updater: updater))
+        let hostingView = NSHostingView(rootView: PreferencesView(viewModel: viewModel, updateManager: updateManager))
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         visualEffect.addSubview(hostingView)
         NSLayoutConstraint.activate([

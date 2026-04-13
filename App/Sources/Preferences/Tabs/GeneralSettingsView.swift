@@ -1,11 +1,10 @@
 // App/Sources/Preferences/Tabs/GeneralSettingsView.swift
 import SwiftUI
 import LaunchAtLogin
-import Sparkle
 
 struct GeneralSettingsView: View {
     @Bindable var viewModel: PreferencesViewModel
-    let updater: SPUUpdater?
+    let updateManager: UpdateManager?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -42,11 +41,11 @@ struct GeneralSettingsView: View {
                 }
             }
 
-            if let updater {
+            if let updateManager {
                 SettingGroup(title: "Updates") {
                     SettingCard {
                         SettingRow(label: "Check for Updates", sublabel: "Automatically checks daily") {
-                            CheckForUpdatesView(updater: updater)
+                            CheckForUpdatesView(updateManager: updateManager)
                         }
                     }
                 }

@@ -1,6 +1,5 @@
 // App/Sources/Preferences/PreferencesView.swift
 import SwiftUI
-import Sparkle
 
 enum PreferencesTab: String, CaseIterable {
     case general
@@ -39,7 +38,7 @@ enum PreferencesTab: String, CaseIterable {
 struct PreferencesView: View {
     @State private var selectedTab: PreferencesTab = .general
     let viewModel: PreferencesViewModel
-    let updater: SPUUpdater?
+    let updateManager: UpdateManager?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -72,7 +71,7 @@ struct PreferencesView: View {
             VStack(alignment: .leading, spacing: 0) {
                 switch selectedTab {
                 case .general:
-                    GeneralSettingsView(viewModel: viewModel, updater: updater)
+                    GeneralSettingsView(viewModel: viewModel, updateManager: updateManager)
                 case .screenshots:
                     ScreenshotSettingsView(viewModel: viewModel)
                 case .recording:

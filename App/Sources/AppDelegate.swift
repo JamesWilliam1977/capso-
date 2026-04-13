@@ -13,8 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var recordingCoordinator: RecordingCoordinator?
     private(set) var ocrCoordinator: OCRCoordinator?
     private var preferencesWindow: PreferencesWindow?
-    /// Sparkle updater controller — manages the update lifecycle.
-    let updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+    /// Sparkle update coordinator used by preferences and manual update checks.
+    let updateManager = UpdateManager()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Show tooltips faster (default is ~2s, reduce to 0.3s)
@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         recordingCoordinator = RecordingCoordinator(settings: settings)
         ocrCoordinator = OCRCoordinator(settings: settings)
         captureCoordinator!.ocrCoordinator = ocrCoordinator
-        preferencesWindow = PreferencesWindow(settings: settings, updater: updaterController.updater)
+        preferencesWindow = PreferencesWindow(settings: settings, updateManager: updateManager)
         menuBarController = MenuBarController(
             settings: settings,
             captureCoordinator: captureCoordinator!,
