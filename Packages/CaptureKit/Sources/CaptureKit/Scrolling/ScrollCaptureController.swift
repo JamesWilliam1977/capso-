@@ -86,97 +86,43 @@ public final class ScrollCaptureController: @unchecked Sendable {
             frameCount: frameCount
         ))
 
-        var consecutiveNoChange = 0
-        var consecutiveFailures = 0
-        var firstOffsetSign: Int? = nil
+        // Main capture loop — runs until user clicks Done (isCancelled)
+        // or max height is reached. No auto-stop on pause/jitter.
+        while !isCancelled {
+            if stitcher.totalHeight >= config.maxHeight { break }
 
-        // Main capture loop — runs until user clicks Done or stop condition
-        captureLoop: while !isCancelled {
-            if stitcher.totalHeight >= config.maxHeight {
-                break
-            }
-
-            // Poll interval
             try? await Task.sleep(for: .milliseconds(150))
             guard !isCancelled else { break }
 
-            // Capture frame B
-            guard let shotB = await captureFrame() else {
-                consecutiveFailures += 1
-                if consecutiveFailures >= 15 { break }
+            guard let shotB = await captureFrame() else { continue }
+
+            // Skip if identical (user not scrolling)
+            if let dataA = shotA?.dataProvider?.data,
+               let dataB = shotB.dataProvider?.data,
+               CFDataGetLength(dataA) == CFDataGetLength(dataB),
+               memcmp(CFDataGetBytePtr(dataA)!, CFDataGetBytePtr(dataB)!, CFDataGetLength(dataA)) == 0 {
                 continue
             }
 
-            // Quick byte-level check: skip if identical (user not scrolling)
-            guard let dataA = shotA?.dataProvider?.data,
-                  let dataB = shotB.dataProvider?.data else {
-                continue
-            }
-            let lenA = CFDataGetLength(dataA)
-            let lenB = CFDataGetLength(dataB)
-            if lenA == lenB, memcmp(CFDataGetBytePtr(dataA)!, CFDataGetBytePtr(dataB)!, lenA) == 0 {
-                // Identical — user hasn't scrolled, keep waiting
-                continue
-            }
-
-            // Frames are different — detect offset with Vision
-            let offset = detectOffset(imageA: shotA!, imageB: shotB)
-
-            if offset == nil {
-                consecutiveFailures += 1
-                if consecutiveFailures >= 15 { break captureLoop }
-                // Still update shotA so next comparison is fresh
+            guard let rawOffset = detectOffset(imageA: shotA!, imageB: shotB) else {
                 shotA = shotB
                 continue
             }
 
-            let rawOffset = offset!
             let absOffset = abs(rawOffset)
+            if absOffset < 3 { continue }
 
-            // Too small offset = noise, not a real scroll
-            if absOffset < 3 {
-                consecutiveNoChange += 1
-                if consecutiveNoChange >= 10 { break captureLoop }
-                continue
-            }
-
-            // Detect direction reversal (elastic bounce = end of content)
-            let sign = rawOffset > 0 ? 1 : -1
-            if let first = firstOffsetSign {
-                if sign != first {
-                    break captureLoop
-                }
-            } else {
-                firstOffsetSign = sign
-            }
-
-            // Stitch the new frame
             let result = stitcher.stitch(newFrame: shotB, detectedOffset: absOffset)
 
-            switch result {
-            case .stitched(let rows):
-                consecutiveNoChange = 0
-                consecutiveFailures = 0
+            if case .stitched = result {
                 frameCount += 1
                 onProgress(ScrollCaptureProgress(
                     currentHeight: stitcher.totalHeight,
                     maxHeight: config.maxHeight,
                     frameCount: frameCount
                 ))
-
-            case .noChange:
-                consecutiveNoChange += 1
-                if consecutiveNoChange >= 10 { break captureLoop }
-
-            case .reversedScroll:
-                break captureLoop
-
-            case .alignmentFailed:
-                consecutiveFailures += 1
-                if consecutiveFailures >= 15 { break captureLoop }
             }
 
-            // A = B for next cycle
             shotA = shotB
         }
 
