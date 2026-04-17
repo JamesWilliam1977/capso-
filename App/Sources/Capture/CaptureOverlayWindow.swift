@@ -1,6 +1,7 @@
 // App/Sources/Capture/CaptureOverlayWindow.swift
 import AppKit
 import CaptureKit
+import SharedKit
 
 @MainActor
 final class CaptureOverlayWindow: NSPanel {
@@ -8,11 +9,13 @@ final class CaptureOverlayWindow: NSPanel {
     var onWindowSelected: ((CGWindowID) -> Void)?
     var onCancelled: (() -> Void)?
 
+    private let settings: AppSettings
     private var overlayView: CaptureOverlayView!
     private var globalEscMonitor: Any?
     private var localEscMonitor: Any?
 
-    init(screen: NSScreen) {
+    init(screen: NSScreen, settings: AppSettings, presetsDisabled: Bool = false) {
+        self.settings = settings
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless, .nonactivatingPanel],
@@ -36,7 +39,7 @@ final class CaptureOverlayWindow: NSPanel {
             perform(preventsActivationSel, with: NSNumber(value: true))
         }
 
-        overlayView = CaptureOverlayView(frame: NSRect(origin: .zero, size: screen.frame.size))
+        overlayView = CaptureOverlayView(frame: NSRect(origin: .zero, size: screen.frame.size), settings: settings, presetsDisabled: presetsDisabled)
         overlayView.onSelectionComplete = { [weak self] rect in
             guard let self, let screen = self.screen else { return }
             self.onAreaSelected?(rect, screen)
