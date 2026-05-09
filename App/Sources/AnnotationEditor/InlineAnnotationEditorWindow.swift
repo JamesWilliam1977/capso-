@@ -99,6 +99,7 @@ private struct InlineAnnotationEditorView: View {
     @AppStorage("annotationBlockSize") private var savedBlockSize: Double = 12
     @AppStorage("annotationCounterSize") private var savedCounterSize: Double = 20
     @AppStorage("annotationHighlighterWidth") private var savedHighlighterWidth: Double = 20
+    @AppStorage("annotationRedactionMode") private var redactionMode: RedactionMode = .pixelate
     @AppStorage("annotationTextFontSize") private var savedTextFontSize: Double = 48
 
     @State private var lineWidth: CGFloat = 3
@@ -173,6 +174,7 @@ private struct InlineAnnotationEditorView: View {
                 sourceImage: sourceImage,
                 currentTool: currentTool,
                 currentStyle: currentStyle,
+                redactionMode: redactionMode,
                 textFontSize: effectiveTextFontSize,
                 zoomScale: displayScale,
                 refreshTrigger: refreshTrigger,
@@ -207,6 +209,7 @@ private struct InlineAnnotationEditorView: View {
                 currentColor: $currentColor,
                 lineWidth: $lineWidth,
                 filled: $filled,
+                redactionMode: $redactionMode,
                 isEditingText: isEditingText,
                 canUndo: document.canUndo,
                 canRedo: document.canRedo,
@@ -251,6 +254,7 @@ private struct InlineAnnotationEditorView: View {
             persistWidth(newValue, for: currentTool)
         }
         .onChange(of: filled) { _, _ in updateSelectedStyle() }
+        .onChange(of: redactionMode) { _, _ in updateSelectedStyle() }
     }
 
     private func savedWidth(for tool: AnnotationTool) -> CGFloat {
@@ -277,6 +281,8 @@ private struct InlineAnnotationEditorView: View {
         if let obj = document.selectedObject {
             if let pixelate = obj as? PixelateObject {
                 pixelate.blockSize = lineWidth
+                pixelate.mode = redactionMode
+                pixelate.style = currentStyle
             } else if let counter = obj as? CounterObject {
                 counter.radius = lineWidth
                 counter.style = AnnotationKit.StrokeStyle(
@@ -339,6 +345,7 @@ private struct InlineAnnotationToolbar: View {
     @Binding var currentColor: AnnotationColor
     @Binding var lineWidth: CGFloat
     @Binding var filled: Bool
+    @Binding var redactionMode: RedactionMode
 
     let isEditingText: Bool
     let canUndo: Bool
@@ -390,11 +397,25 @@ private struct InlineAnnotationToolbar: View {
             divider
 
             HStack(spacing: 7) {
-                Slider(value: $lineWidth, in: sliderRange, step: sliderStep)
-                    .frame(width: 82)
-                    .help(sliderHelp)
+                if !(currentTool == .pixelate && redactionMode == .solid) {
+                    Slider(value: $lineWidth, in: sliderRange, step: sliderStep)
+                        .frame(width: 82)
+                        .help(sliderHelp)
+                }
 
-                if currentTool != .counter && currentTool != .highlighter && !isFontSizeMode {
+                if currentTool == .pixelate {
+                    Picker("", selection: $redactionMode) {
+                        ForEach(RedactionMode.allCases, id: \.self) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 168)
+                    .help("Redaction Mode")
+                }
+
+                if currentTool != .counter && currentTool != .highlighter && currentTool != .pixelate && !isFontSizeMode {
                     iconButton(
                         systemName: filled ? "square.fill" : "square",
                         help: "Fill Shape",

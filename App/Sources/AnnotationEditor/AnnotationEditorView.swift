@@ -45,6 +45,7 @@ struct AnnotationEditorView: View {
     @AppStorage("annotationBlockSize") private var savedBlockSize: Double = 12
     @AppStorage("annotationCounterSize") private var savedCounterSize: Double = 20
     @AppStorage("annotationHighlighterWidth") private var savedHighlighterWidth: Double = 20
+    @AppStorage("annotationRedactionMode") private var redactionMode: RedactionMode = .pixelate
     /// Preserved font size for the Text tool. Swapped in/out of `lineWidth`
     /// as the user toggles tools — same pattern as savedBlockSize etc.
     @AppStorage("annotationTextFontSize") private var savedTextFontSize: Double = 48
@@ -201,6 +202,7 @@ struct AnnotationEditorView: View {
                     currentColor: $currentColor,
                     lineWidth: $lineWidth,
                     filled: $filled,
+                    redactionMode: $redactionMode,
                     showBeautifyPanel: $showBeautifyPanel,
                     isEditingText: isEditingText,
                     canUndo: document.canUndo,
@@ -234,6 +236,7 @@ struct AnnotationEditorView: View {
                                 sourceImage: sourceImage,
                                 currentTool: currentTool,
                                 currentStyle: currentStyle,
+                                redactionMode: redactionMode,
                                 textFontSize: effectiveTextFontSize,
                                 zoomScale: zoomScale,
                                 refreshTrigger: refreshTrigger,
@@ -315,6 +318,7 @@ struct AnnotationEditorView: View {
                         persistWidth(newValue, for: currentTool)
                     }
                     .onChange(of: filled) { _, _ in updateSelectedStyle() }
+                    .onChange(of: redactionMode) { _, _ in updateSelectedStyle() }
                     .onChange(of: geo.size) { _, newSize in
                         // Re-fit if window is resized and we're at fit scale
                         if zoomScale == fitScale(for: newSize) { return }
@@ -388,6 +392,8 @@ struct AnnotationEditorView: View {
         if let obj = document.selectedObject {
             if let pixelate = obj as? PixelateObject {
                 pixelate.blockSize = lineWidth
+                pixelate.mode = redactionMode
+                pixelate.style = currentStyle
             } else if let counter = obj as? CounterObject {
                 counter.radius = lineWidth
                 counter.style = AnnotationKit.StrokeStyle(color: currentColor, lineWidth: lineWidth, filled: filled)

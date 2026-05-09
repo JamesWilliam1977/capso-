@@ -7,6 +7,20 @@ public enum AnnotationTool: String, CaseIterable, Sendable {
     case select, arrow, rectangle, ellipse, text, freehand, pixelate, counter, highlighter
 }
 
+public enum RedactionMode: Int, Codable, CaseIterable, Sendable {
+    case pixelate
+    case blur
+    case solid
+
+    public var label: String {
+        switch self {
+        case .pixelate: "Pixelate"
+        case .blur: "Blur"
+        case .solid: "Solid"
+        }
+    }
+}
+
 public struct ObjectID: Hashable, Sendable {
     public let value: UUID
     public init() { self.value = UUID() }

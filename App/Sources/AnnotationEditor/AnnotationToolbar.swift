@@ -7,6 +7,7 @@ struct AnnotationToolbar: View {
     @Binding var currentColor: AnnotationColor
     @Binding var lineWidth: CGFloat
     @Binding var filled: Bool
+    @Binding var redactionMode: RedactionMode
     @Binding var showBeautifyPanel: Bool
     /// True when an inline text edit is active (either via the text tool or
     /// by double-clicking an existing TextObject in select mode). When set,
@@ -128,9 +129,21 @@ struct AnnotationToolbar: View {
                     .frame(width: 80)
                     .help("Font Size: \(Int(lineWidth))")
             } else if currentTool == .pixelate {
-                Slider(value: $lineWidth, in: 4...48, step: 2)
-                    .frame(width: 80)
-                    .help("Block Size: \(Int(lineWidth))")
+                Picker("", selection: $redactionMode) {
+                    ForEach(RedactionMode.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 184)
+                .help("Redaction Mode")
+
+                if redactionMode != .solid {
+                    Slider(value: $lineWidth, in: 4...48, step: 2)
+                        .frame(width: 80)
+                        .help("Block Size: \(Int(lineWidth))")
+                }
             } else if currentTool == .counter {
                 Slider(value: $lineWidth, in: 12...40, step: 1)
                     .frame(width: 80)

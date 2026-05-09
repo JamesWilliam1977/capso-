@@ -16,6 +16,7 @@ final class AnnotationCanvasNSView: NSView {
     var currentStyle: StrokeStyle = StrokeStyle() {
         didSet { syncEditorStyle() }
     }
+    var redactionMode: RedactionMode = .pixelate
     /// Font size used for newly created TextObjects and propagated live to
     /// the inline editor. Pushed from SwiftUI by AnnotationCanvasView.
     var currentTextFontSize: CGFloat = 48 {
@@ -531,7 +532,13 @@ final class AnnotationCanvasNSView: NSView {
                 let rect = CGRect(x: min(start.x, end.x), y: min(start.y, end.y),
                                   width: abs(end.x - start.x), height: abs(end.y - start.y))
                 if rect.width > 5 / zoomScale && rect.height > 5 / zoomScale {
-                    doc.addObject(PixelateObject(rect: rect, blockSize: currentStyle.lineWidth))
+                    let redaction = PixelateObject(
+                        rect: rect,
+                        blockSize: currentStyle.lineWidth,
+                        mode: redactionMode
+                    )
+                    redaction.style = currentStyle
+                    doc.addObject(redaction)
                 }
             case .counter:
                 let number = nextCounterNumber()

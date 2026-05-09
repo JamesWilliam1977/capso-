@@ -8,6 +8,7 @@ struct AnnotationCanvasView: NSViewRepresentable {
     let sourceImage: CGImage
     let currentTool: AnnotationTool
     let currentStyle: AnnotationKit.StrokeStyle
+    let redactionMode: RedactionMode
     /// Font size for the text tool / active inline edit. Bound to the
     /// font-size slider in SwiftUI.
     let textFontSize: CGFloat
@@ -40,6 +41,7 @@ struct AnnotationCanvasView: NSViewRepresentable {
         view.sourceImage = sourceImage
         view.currentTool = currentTool
         view.currentStyle = currentStyle
+        view.redactionMode = redactionMode
         view.currentTextFontSize = textFontSize
         view.zoomScale = zoomScale
         view.textRegions = textRegions
@@ -61,6 +63,7 @@ struct AnnotationCanvasView: NSViewRepresentable {
         let toolChanged = nsView.currentTool != currentTool
         nsView.currentTool = currentTool
         nsView.currentStyle = currentStyle
+        nsView.redactionMode = redactionMode
         nsView.currentTextFontSize = textFontSize
         nsView.zoomScale = zoomScale
         nsView.textRegions = textRegions
