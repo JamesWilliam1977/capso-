@@ -8,8 +8,8 @@ import CoreGraphics
 struct AnnotationObjectTests {
     @Test("AnnotationTool has all cases")
     func tools() {
-        let tools: [AnnotationTool] = [.select, .arrow, .rectangle, .ellipse, .text, .freehand, .pixelate, .counter, .highlighter]
-        #expect(tools.count == 9)
+        let tools: [AnnotationTool] = [.select, .arrow, .line, .rectangle, .ellipse, .text, .freehand, .pixelate, .counter, .highlighter]
+        #expect(tools.count == 10)
     }
 
     @Test("StrokeStyle has defaults")
@@ -45,6 +45,38 @@ struct AnnotationObjectTests {
         let id1 = ObjectID()
         let id2 = ObjectID()
         #expect(id1 != id2)
+    }
+}
+
+@Suite("LineObject")
+struct LineObjectTests {
+    @Test("Line has bounds padded by stroke width")
+    func bounds() {
+        let line = LineObject(
+            start: CGPoint(x: 10, y: 20),
+            end: CGPoint(x: 110, y: 70),
+            style: StrokeStyle(lineWidth: 6)
+        )
+        let b = line.bounds
+        #expect(b.minX <= 10)
+        #expect(b.minY <= 20)
+        #expect(b.maxX >= 110)
+        #expect(b.maxY >= 70)
+    }
+
+    @Test("Line hit test follows the segment")
+    func hitTest() {
+        let line = LineObject(start: CGPoint(x: 0, y: 0), end: CGPoint(x: 100, y: 0))
+        #expect(line.hitTest(point: CGPoint(x: 50, y: 0), threshold: 5))
+        #expect(!line.hitTest(point: CGPoint(x: 50, y: 20), threshold: 5))
+    }
+
+    @Test("Line move keeps endpoints together")
+    func move() {
+        let line = LineObject(start: CGPoint(x: 10, y: 10), end: CGPoint(x: 50, y: 50))
+        line.move(by: CGSize(width: 5, height: 5))
+        #expect(line.start == CGPoint(x: 15, y: 15))
+        #expect(line.end == CGPoint(x: 55, y: 55))
     }
 }
 

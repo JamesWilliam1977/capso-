@@ -31,7 +31,7 @@ struct AnnotationCanvasView: NSViewRepresentable {
     /// several in a row. Text and crop intentionally stay one-shot: text has
     /// its own inline-edit flow and crop is naturally one-per-image.
     private static let stickyTools: Set<AnnotationTool> = [
-        .arrow, .rectangle, .ellipse, .pixelate,
+        .arrow, .line, .rectangle, .ellipse, .pixelate,
         .counter, .freehand, .highlighter
     ]
 

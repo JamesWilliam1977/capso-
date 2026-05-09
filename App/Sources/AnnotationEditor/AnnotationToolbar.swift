@@ -54,6 +54,7 @@ struct AnnotationToolbar: View {
         HStack(spacing: 4) {
             toolButton(.select, icon: "cursorarrow", label: "Select")
             toolButton(.arrow, icon: "arrow.up.right", label: "Arrow")
+            toolButton(.line, icon: "line.diagonal", label: "Line")
             toolButton(.rectangle, icon: "rectangle", label: "Rectangle")
             toolButton(.ellipse, icon: "circle", label: "Ellipse")
             textToolButton

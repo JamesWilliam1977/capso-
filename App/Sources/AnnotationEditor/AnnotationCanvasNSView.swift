@@ -50,6 +50,8 @@ final class AnnotationCanvasNSView: NSView {
     private var dragObjectID: ObjectID?
     private var activeResizeHandle: ResizeHandle?
     private var resizeOriginalBounds: CGRect?
+    private var resizeOriginalFreehandPoints: [CGPoint]?
+    private var resizeOriginalEndpoints: (start: CGPoint, end: CGPoint)?
     /// Original fontSize captured when a TextObject resize drag begins.
     /// Text uses intrinsic sizing (bounds derived from fontSize), so we scale
     /// fontSize from this original value — not the live one, which drifts each tick.
@@ -116,13 +118,9 @@ final class AnnotationCanvasNSView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        // For drawing tools the cursor rect handles the crosshair; nothing to do.
-        guard currentTool == .select else { return }
-
         let point = toImagePoint(convert(event.locationInWindow, from: nil))
         guard let doc = document else { return }
 
-        // Check if over a handle of the selected object
         if let selected = doc.selectedObject {
             if let handle = handleHitTest(point: point, bounds: selected.bounds) {
                 cursorForHandle(handle).set()
@@ -130,11 +128,12 @@ final class AnnotationCanvasNSView: NSView {
             }
         }
 
-        // Check if over any object body
-        if doc.objectAt(point: point) != nil {
+        if currentTool == .select, doc.objectAt(point: point) != nil {
             NSCursor.openHand.set()
-        } else {
+        } else if currentTool == .select {
             NSCursor.arrow.set()
+        } else {
+            NSCursor.crosshair.set()
         }
     }
 
@@ -273,7 +272,7 @@ final class AnnotationCanvasNSView: NSView {
                           width: abs(end.x - start.x), height: abs(end.y - start.y))
 
         switch currentTool {
-        case .arrow: ctx.move(to: start); ctx.addLine(to: end); ctx.strokePath()
+        case .arrow, .line: ctx.move(to: start); ctx.addLine(to: end); ctx.strokePath()
         case .rectangle: ctx.stroke(rect)
         case .ellipse: ctx.strokeEllipse(in: rect)
         case .pixelate: ctx.setFillColor(CGColor(gray: 0.5, alpha: 0.3)); ctx.fill(rect)
@@ -311,6 +310,28 @@ final class AnnotationCanvasNSView: NSView {
         isDragging = true
         activeResizeHandle = nil
         resizeOriginalTextFontSize = nil
+        resizeOriginalFreehandPoints = nil
+        resizeOriginalEndpoints = nil
+
+        if let selected = doc.selectedObject,
+           let handle = handleHitTest(point: point, bounds: selected.bounds) {
+            activeResizeHandle = handle
+            resizeOriginalBounds = selected.bounds
+            resizeOriginalFreehandPoints = (selected as? FreehandObject)?.points
+            if let arrow = selected as? ArrowObject {
+                resizeOriginalEndpoints = (arrow.start, arrow.end)
+            } else if let line = selected as? LineObject {
+                resizeOriginalEndpoints = (line.start, line.end)
+            }
+            if let text = selected as? TextObject {
+                resizeOriginalTextFontSize = text.fontSize
+            }
+            dragObjectID = selected.id
+            doc.beginDrag()
+            cursorForHandle(handle).set()
+            needsDisplay = true
+            return
+        }
 
         if currentTool == .select {
             // Double-click a TextObject → enter inline edit mode.
@@ -319,22 +340,6 @@ final class AnnotationCanvasNSView: NSView {
                 isDragging = false
                 beginTextEditing(at: text.origin, existing: text)
                 return
-            }
-
-            // Check resize handles on selected object FIRST
-            if let selected = doc.selectedObject {
-                if let handle = handleHitTest(point: point, bounds: selected.bounds) {
-                    activeResizeHandle = handle
-                    resizeOriginalBounds = selected.bounds
-                    if let text = selected as? TextObject {
-                        resizeOriginalTextFontSize = text.fontSize
-                    }
-                    dragObjectID = selected.id
-                    doc.beginDrag()
-                    NSCursor.closedHand.set()
-                    needsDisplay = true
-                    return
-                }
             }
 
             // Then check object body for move
@@ -376,13 +381,13 @@ final class AnnotationCanvasNSView: NSView {
         let point = toImagePoint(convert(event.locationInWindow, from: nil))
         dragCurrent = point
 
-        if currentTool == .select {
-            if let handle = activeResizeHandle, let objID = dragObjectID,
-               let origBounds = resizeOriginalBounds, let start = dragStart {
-                // Resize: compute new bounds based on which handle is dragged
-                resizeObject(id: objID, handle: handle, originalBounds: origBounds,
-                             dragStart: start, dragCurrent: point)
-            } else if let objID = dragObjectID, let start = dragStart {
+        if let handle = activeResizeHandle, let objID = dragObjectID,
+           let origBounds = resizeOriginalBounds, let start = dragStart {
+            // Resize handles remain active even while a drawing tool is selected.
+            resizeObject(id: objID, handle: handle, originalBounds: origBounds,
+                         dragStart: start, dragCurrent: point)
+        } else if currentTool == .select {
+            if let objID = dragObjectID, let start = dragStart {
                 // Move
                 let delta = CGSize(width: point.x - start.x, height: point.y - start.y)
                 document?.moveObject(id: objID, by: delta)
@@ -475,21 +480,33 @@ final class AnnotationCanvasNSView: NSView {
             }
         }
         else if let arrow = obj as? ArrowObject {
-            switch handle {
-            case .topLeft, .bottomLeft: arrow.start = CGPoint(x: newRect.minX, y: newRect.midY)
-            case .topRight, .bottomRight: arrow.end = CGPoint(x: newRect.maxX, y: newRect.midY)
-            }
+            guard let endpoints = resizeOriginalEndpoints else { return }
+            arrow.start = scaledPoint(endpoints.start, from: originalBounds, to: newRect)
+            arrow.end = scaledPoint(endpoints.end, from: originalBounds, to: newRect)
+        } else if let line = obj as? LineObject {
+            guard let endpoints = resizeOriginalEndpoints else { return }
+            line.start = scaledPoint(endpoints.start, from: originalBounds, to: newRect)
+            line.end = scaledPoint(endpoints.end, from: originalBounds, to: newRect)
         } else if let freehand = obj as? FreehandObject {
             // Scale all points from original bounds to new bounds
-            guard originalBounds.width > 0, originalBounds.height > 0 else { return }
+            guard originalBounds.width > 0, originalBounds.height > 0,
+                  let originalPoints = resizeOriginalFreehandPoints else { return }
             let scaleX = newRect.width / originalBounds.width
             let scaleY = newRect.height / originalBounds.height
-            for i in 0..<freehand.points.count {
-                freehand.points[i].x = newRect.origin.x + (freehand.points[i].x - originalBounds.origin.x) * scaleX
-                freehand.points[i].y = newRect.origin.y + (freehand.points[i].y - originalBounds.origin.y) * scaleY
+            for i in 0..<min(freehand.points.count, originalPoints.count) {
+                freehand.points[i].x = newRect.origin.x + (originalPoints[i].x - originalBounds.origin.x) * scaleX
+                freehand.points[i].y = newRect.origin.y + (originalPoints[i].y - originalBounds.origin.y) * scaleY
             }
             freehand.invalidateCache()
         }
+    }
+
+    private func scaledPoint(_ point: CGPoint, from originalBounds: CGRect, to newRect: CGRect) -> CGPoint {
+        guard originalBounds.width > 0, originalBounds.height > 0 else { return point }
+        return CGPoint(
+            x: newRect.origin.x + (point.x - originalBounds.origin.x) * (newRect.width / originalBounds.width),
+            y: newRect.origin.y + (point.y - originalBounds.origin.y) * (newRect.height / originalBounds.height)
+        )
     }
 
     override func mouseUp(with event: NSEvent) {
@@ -498,16 +515,37 @@ final class AnnotationCanvasNSView: NSView {
         }
         let end = toImagePoint(convert(event.locationInWindow, from: nil))
 
+        if activeResizeHandle != nil {
+            dragObjectID = nil
+            activeResizeHandle = nil
+            resizeOriginalBounds = nil
+            resizeOriginalTextFontSize = nil
+            resizeOriginalFreehandPoints = nil
+            resizeOriginalEndpoints = nil
+            isDragging = false
+            dragStart = nil
+            dragCurrent = nil
+            needsDisplay = true
+            onDocumentChanged?()
+            return
+        }
+
         if currentTool == .select {
             dragObjectID = nil
             activeResizeHandle = nil
             resizeOriginalBounds = nil
             resizeOriginalTextFontSize = nil
+            resizeOriginalFreehandPoints = nil
+            resizeOriginalEndpoints = nil
         } else {
             switch currentTool {
             case .arrow:
                 if hypot(end.x - start.x, end.y - start.y) > 5 / zoomScale {
                     doc.addObject(ArrowObject(start: start, end: end, style: currentStyle))
+                }
+            case .line:
+                if hypot(end.x - start.x, end.y - start.y) > 5 / zoomScale {
+                    doc.addObject(LineObject(start: start, end: end, style: currentStyle))
                 }
             case .rectangle:
                 let rect = CGRect(x: min(start.x, end.x), y: min(start.y, end.y),

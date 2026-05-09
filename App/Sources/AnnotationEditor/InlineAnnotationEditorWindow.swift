@@ -366,6 +366,7 @@ private struct InlineAnnotationToolbar: View {
             HStack(spacing: 4) {
                 toolButton(.select)
                 toolButton(.arrow)
+                toolButton(.line)
                 toolButton(.rectangle)
                 toolButton(.ellipse)
                 toolButton(.text)
@@ -546,6 +547,7 @@ private struct InlineAnnotationToolbar: View {
         switch tool {
         case .select: return "cursorarrow"
         case .arrow: return "arrow.up.right"
+        case .line: return "line.diagonal"
         case .rectangle: return "rectangle"
         case .ellipse: return "circle"
         case .text: return "textformat"
@@ -560,6 +562,7 @@ private struct InlineAnnotationToolbar: View {
         switch tool {
         case .select: return "Select"
         case .arrow: return "Arrow"
+        case .line: return "Line"
         case .rectangle: return "Rectangle"
         case .ellipse: return "Ellipse"
         case .text: return "Text"
