@@ -101,24 +101,7 @@ struct AnnotationToolbar: View {
     }
 
     private var colorGroup: some View {
-        HStack(spacing: 3) {
-            ForEach(AnnotationColor.allCases, id: \.self) { color in
-                Button(action: { currentColor = color }) {
-                    Circle()
-                        .fill(Color(cgColor: color.cgColor))
-                        .frame(width: 19, height: 19)
-                        .overlay(Circle().stroke(currentColor == color ? Color.accentColor : Color.clear, lineWidth: 2))
-                        .overlay(Circle().stroke(Color.black.opacity(0.24), lineWidth: 0.5))
-                        .padding(2)
-                        .background(
-                            Circle()
-                                .fill(currentColor == color ? Color.accentColor.opacity(0.12) : Color.clear)
-                        )
-                }
-                .buttonStyle(.plain)
-                .help(Text(color.rawValue.capitalized))
-            }
-        }
+        AnnotationColorControls(currentColor: $currentColor)
     }
 
     private var strokeGroup: some View {

@@ -20,6 +20,26 @@ struct AnnotationObjectTests {
         #expect(style.opacity == 1.0)
     }
 
+    @Test("AnnotationColor keeps preset raw values")
+    func presetColorRawValues() {
+        #expect(AnnotationColor(rawValue: "red") == .red)
+        #expect(AnnotationColor.blue.rawValue == "blue")
+        #expect(AnnotationColor.allCases.contains(.purple))
+    }
+
+    @Test("AnnotationColor supports custom hex colors")
+    func customHexColor() {
+        let color = AnnotationColor(rawValue: "#3366CC")
+        #expect(color?.rawValue == "#3366CC")
+        #expect(color?.hexRGB == "#3366CC")
+
+        let components = color?.cgColor.components
+        #expect(components?[0] == 0.2)
+        #expect(components?[1] == 0.4)
+        #expect(components?[2] == 0.8)
+        #expect(components?[3] == 1.0)
+    }
+
     @Test("ObjectID is unique")
     func uniqueIDs() {
         let id1 = ObjectID()

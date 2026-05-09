@@ -377,22 +377,11 @@ private struct InlineAnnotationToolbar: View {
 
             divider
 
-            HStack(spacing: 3) {
-                ForEach(AnnotationColor.allCases, id: \.self) { color in
-                    Button(action: { currentColor = color }) {
-                        Circle()
-                            .fill(Color(cgColor: color.cgColor))
-                            .frame(width: 17, height: 17)
-                            .overlay(
-                                Circle()
-                                    .stroke(currentColor == color ? Color.white : Color.clear, lineWidth: 2)
-                            )
-                            .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 0.5))
-                    }
-                    .buttonStyle(.plain)
-                    .help(localizedColorName(for: color))
-                }
-            }
+            AnnotationColorControls(
+                currentColor: $currentColor,
+                swatchSize: 17,
+                selectedRingColor: .white
+            )
 
             divider
 
@@ -581,16 +570,4 @@ private struct InlineAnnotationToolbar: View {
         }
     }
 
-    private func localizedColorName(for color: AnnotationColor) -> String {
-        switch color {
-        case .red: return String(localized: "Red")
-        case .orange: return String(localized: "Orange")
-        case .yellow: return String(localized: "Yellow")
-        case .green: return String(localized: "Green")
-        case .blue: return String(localized: "Blue")
-        case .purple: return String(localized: "Purple")
-        case .white: return String(localized: "White")
-        case .black: return String(localized: "Black")
-        }
-    }
 }
