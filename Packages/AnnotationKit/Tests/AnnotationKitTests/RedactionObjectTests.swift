@@ -55,6 +55,21 @@ struct RedactionObjectTests {
         #expect(sampleRGBA(rendered, x: 7, y: 7) != sampleRGBA(source, x: 7, y: 7))
         #expect(sampleRGBA(rendered, x: 1, y: 1) == sampleRGBA(source, x: 1, y: 1))
     }
+
+    @Test("Pixelate redaction renders repeated block pixels")
+    func pixelateRedactionRendersBlockPixels() throws {
+        let source = try makeHorizontalGradientImage(width: 16, height: 16)
+        let redaction = PixelateObject(
+            rect: CGRect(x: 0, y: 0, width: 16, height: 16),
+            blockSize: 4,
+            mode: .pixelate
+        )
+
+        let rendered = try #require(AnnotationRenderer.render(sourceImage: source, objects: [redaction]))
+
+        #expect(sampleRGBA(rendered, x: 1, y: 8) == sampleRGBA(rendered, x: 6, y: 8))
+        #expect(sampleRGBA(rendered, x: 1, y: 8) != sampleRGBA(rendered, x: 10, y: 8))
+    }
 }
 
 private struct RGBA: Equatable {
@@ -77,6 +92,16 @@ private func makeSplitImage(width: Int, height: Int) throws -> CGImage {
     context.fill(CGRect(x: 0, y: 0, width: width, height: height))
     context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
     context.fill(CGRect(x: width / 2, y: 0, width: width / 2, height: height))
+    return try #require(context.makeImage())
+}
+
+private func makeHorizontalGradientImage(width: Int, height: Int) throws -> CGImage {
+    let context = try #require(makeBitmapContext(width: width, height: height))
+    for x in 0..<width {
+        let gray = CGFloat(x) / CGFloat(max(1, width - 1))
+        context.setFillColor(CGColor(red: gray, green: gray, blue: gray, alpha: 1))
+        context.fill(CGRect(x: x, y: 0, width: 1, height: height))
+    }
     return try #require(context.makeImage())
 }
 

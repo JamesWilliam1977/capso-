@@ -10,13 +10,7 @@ struct AnnotationColorControls: View {
     var selectedRingColor: Color = .accentColor
 
     @State private var sampler: NSColorSampler?
-
-    private var customColor: Binding<Color> {
-        Binding(
-            get: { Color(nsColor: currentColor.nsColor) },
-            set: { currentColor = AnnotationColor(nsColor: NSColor($0)) }
-        )
-    }
+    @StateObject private var colorPanel = AnnotationColorPanelController()
 
     var body: some View {
         HStack(spacing: spacing) {
@@ -37,10 +31,22 @@ struct AnnotationColorControls: View {
                 .help(Text(color.displayName))
             }
 
-            ColorPicker("", selection: customColor, supportsOpacity: false)
-                .labelsHidden()
+            Button(action: showCustomColorPanel) {
+                ZStack {
+                    Circle()
+                        .fill(Color(nsColor: currentColor.nsColor))
+                        .overlay(Circle().stroke(Color.black.opacity(0.28), lineWidth: 0.5))
+                        .overlay(Circle().stroke(selectedRingColor.opacity(0.55), lineWidth: 1.5))
+
+                    Image(systemName: "paintpalette.fill")
+                        .font(.system(size: max(10, swatchSize - 8), weight: .semibold))
+                        .foregroundStyle(readableGlyphColor(for: currentColor.nsColor))
+                }
                 .frame(width: swatchSize + 8, height: swatchSize + 8)
-                .help("Custom Color")
+                .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Custom Color")
 
             Button(action: pickScreenColor) {
                 Image(systemName: "eyedropper")
@@ -54,6 +60,12 @@ struct AnnotationColorControls: View {
         }
     }
 
+    private func showCustomColorPanel() {
+        colorPanel.show(initialColor: currentColor.nsColor) { color in
+            currentColor = AnnotationColor(nsColor: color)
+        }
+    }
+
     private func pickScreenColor() {
         let sampler = NSColorSampler()
         self.sampler = sampler
@@ -63,5 +75,32 @@ struct AnnotationColorControls: View {
             }
             self.sampler = nil
         }
+    }
+
+    private func readableGlyphColor(for color: NSColor) -> Color {
+        let rgb = color.usingColorSpace(.deviceRGB) ?? color
+        let luminance = (0.299 * rgb.redComponent) + (0.587 * rgb.greenComponent) + (0.114 * rgb.blueComponent)
+        return luminance > 0.62 ? Color.black.opacity(0.72) : Color.white.opacity(0.92)
+    }
+}
+
+@MainActor
+private final class AnnotationColorPanelController: NSObject, ObservableObject {
+    private var onChange: ((NSColor) -> Void)?
+
+    func show(initialColor: NSColor, onChange: @escaping (NSColor) -> Void) {
+        self.onChange = onChange
+
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+        panel.color = initialColor
+        panel.setTarget(self)
+        panel.setAction(#selector(colorChanged(_:)))
+        panel.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func colorChanged(_ sender: NSColorPanel) {
+        onChange?(sender.color)
     }
 }

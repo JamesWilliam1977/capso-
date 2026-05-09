@@ -98,14 +98,8 @@ final class AnnotationCanvasNSView: NSView {
     // MARK: - Handle Hit Testing
 
     private func handleHitTest(point: CGPoint, bounds: CGRect) -> ResizeHandle? {
-        let r = handleRadius + 3  // generous hit area
-        let corners: [(ResizeHandle, CGPoint)] = [
-            (.topLeft, CGPoint(x: bounds.minX, y: bounds.minY)),
-            (.topRight, CGPoint(x: bounds.maxX, y: bounds.minY)),
-            (.bottomLeft, CGPoint(x: bounds.minX, y: bounds.maxY)),
-            (.bottomRight, CGPoint(x: bounds.maxX, y: bounds.maxY)),
-        ]
-        for (handle, corner) in corners {
+        let r = max(10 / max(zoomScale, 0.1), handleRadius + 4)
+        for (handle, corner) in selectionHandleCenters(for: bounds) {
             if hypot(point.x - corner.x, point.y - corner.y) <= r {
                 return handle
             }
@@ -226,30 +220,47 @@ final class AnnotationCanvasNSView: NSView {
     }
 
     private func drawSelectionHandles(ctx: CGContext, bounds: CGRect) {
-        let hs: CGFloat = 5
-        let lw: CGFloat = 1.5
-        let selColor = CGColor(red: 0, green: 0.48, blue: 1, alpha: 1)
+        ctx.saveGState()
+
+        let scale = max(zoomScale, 0.1)
+        let hs: CGFloat = 4 / scale
+        let lw: CGFloat = 1 / scale
+        let selColor = NSColor.controlAccentColor.withAlphaComponent(0.78).cgColor
+        let frame = selectionFrame(for: bounds)
 
         // Selection border
         ctx.setStrokeColor(selColor)
         ctx.setLineWidth(lw)
-        ctx.stroke(bounds.insetBy(dx: -2, dy: -2))
+        ctx.setLineDash(phase: 0, lengths: [4 / scale, 3 / scale])
+        ctx.stroke(frame)
+        ctx.setLineDash(phase: 0, lengths: [])
 
         // Corner handles
-        let corners = [
-            CGPoint(x: bounds.minX, y: bounds.minY),
-            CGPoint(x: bounds.maxX, y: bounds.minY),
-            CGPoint(x: bounds.minX, y: bounds.maxY),
-            CGPoint(x: bounds.maxX, y: bounds.maxY),
-        ]
-        for corner in corners {
+        for (_, corner) in selectionHandleCenters(for: bounds) {
             let r = CGRect(x: corner.x - hs, y: corner.y - hs, width: hs * 2, height: hs * 2)
-            ctx.setFillColor(.white)
+            ctx.setFillColor(NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor)
             ctx.fillEllipse(in: r)
             ctx.setStrokeColor(selColor)
             ctx.setLineWidth(lw)
             ctx.strokeEllipse(in: r)
         }
+
+        ctx.restoreGState()
+    }
+
+    private func selectionFrame(for bounds: CGRect) -> CGRect {
+        let outset = 6 / max(zoomScale, 0.1)
+        return bounds.insetBy(dx: -outset, dy: -outset)
+    }
+
+    private func selectionHandleCenters(for bounds: CGRect) -> [(ResizeHandle, CGPoint)] {
+        let frame = selectionFrame(for: bounds)
+        return [
+            (.topLeft, CGPoint(x: frame.minX, y: frame.minY)),
+            (.topRight, CGPoint(x: frame.maxX, y: frame.minY)),
+            (.bottomLeft, CGPoint(x: frame.minX, y: frame.maxY)),
+            (.bottomRight, CGPoint(x: frame.maxX, y: frame.maxY)),
+        ]
     }
 
     private func drawPreview(ctx: CGContext, from start: CGPoint, to end: CGPoint) {
