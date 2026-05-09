@@ -10,6 +10,7 @@ final class CaptureAllInOneAnnotationOverlay {
     private var canvasWindow: NSPanel?
     private var toolbarWindow: NSPanel?
     private var session: AllInOneAnnotationSession?
+    private var currentSelectionRect: CGRect?
 
     init(screen: NSScreen) {
         self.screen = screen
@@ -25,15 +26,15 @@ final class CaptureAllInOneAnnotationOverlay {
         }
         session.availableWidth = selectionRect.width
         self.session = session
+        currentSelectionRect = selectionRect
 
         showCanvas(session: session, selectionRect: selectionRect)
         showToolbar(session: session, selectionRect: selectionRect, avoidingFrame: avoidingFrame)
     }
 
     func update(sourceImage: CGImage, selectionRect: CGRect, avoidingFrame: CGRect?) {
-        if let session, session.document.objects.isEmpty {
-            session.replaceSourceImage(sourceImage)
-        } else if session == nil {
+        let previousSelectionRect = currentSelectionRect
+        if session == nil {
             let newSession = AllInOneAnnotationSession(sourceImage: sourceImage)
             newSession.onRequestCanvasFocus = { [weak self] in
                 self?.focusCanvas()
@@ -45,6 +46,12 @@ final class CaptureAllInOneAnnotationOverlay {
         }
 
         guard let session else { return }
+        let objectOffset = objectOffset(
+            from: previousSelectionRect,
+            to: selectionRect,
+            sourceImage: session.sourceImage
+        )
+        session.replaceSourceImage(sourceImage, objectOffset: objectOffset)
         let wasCompact = session.usesCompactToolbar
         session.availableWidth = selectionRect.width
         if wasCompact != session.usesCompactToolbar {
@@ -59,6 +66,7 @@ final class CaptureAllInOneAnnotationOverlay {
             session: session,
             displayScale: displayScale(for: sourceImage, selectionRect: selectionRect)
         ))
+        currentSelectionRect = selectionRect
     }
 
     func close() {
@@ -67,6 +75,7 @@ final class CaptureAllInOneAnnotationOverlay {
         canvasWindow?.close()
         canvasWindow = nil
         session = nil
+        currentSelectionRect = nil
     }
 
     func renderImage(afterCommit completion: @escaping (CGImage?) -> Void) {
@@ -108,7 +117,7 @@ final class CaptureAllInOneAnnotationOverlay {
             backing: .buffered,
             defer: false
         )
-        panel.level = .screenSaver + 2
+        panel.level = .screenSaver + 3
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -251,6 +260,15 @@ final class CaptureAllInOneAnnotationOverlay {
             screenRect: selectionRect
         ) ?? 1
     }
+
+    private func objectOffset(from oldRect: CGRect?, to newRect: CGRect, sourceImage: CGImage) -> CGSize {
+        guard let oldRect else { return .zero }
+        let scale = displayScale(for: sourceImage, selectionRect: oldRect)
+        return CGSize(
+            width: (oldRect.minX - newRect.minX) * scale,
+            height: (newRect.maxY - oldRect.maxY) * scale
+        )
+    }
 }
 
 private final class AllInOneAnnotationPanel: NSPanel {
@@ -360,9 +378,12 @@ final class AllInOneAnnotationSession: ObservableObject {
         availableWidth < 420
     }
 
-    func replaceSourceImage(_ image: CGImage) {
+    func replaceSourceImage(_ image: CGImage, objectOffset: CGSize = .zero) {
         sourceImage = image
-        document.replaceImage(size: CGSize(width: image.width, height: image.height))
+        document.updateImageSizePreservingObjects(
+            size: CGSize(width: image.width, height: image.height),
+            objectOffset: objectOffset
+        )
         refreshTrigger += 1
     }
 

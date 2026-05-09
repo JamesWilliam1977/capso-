@@ -103,7 +103,7 @@ final class CaptureAllInOneToolbarWindow {
             defer: false
         )
         panel.onEscape = { [weak self] in self?.onCancel?() }
-        panel.level = .screenSaver
+        panel.level = frozenImage == nil ? .screenSaver : .screenSaver + 2
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -118,6 +118,7 @@ final class CaptureAllInOneToolbarWindow {
             minSelectionSize: Self.minimumSelectionSize,
             activePreset: activePreset
         )
+        overlayView.passesThroughSelectionBody = frozenImage != nil
         overlayView.onSelectionChanged = { [weak self] selectionRect in
             self?.updateSelection(selectionRect)
         }
@@ -140,7 +141,7 @@ final class CaptureAllInOneToolbarWindow {
             defer: false
         )
         panel.onEscape = { [weak self] in self?.onCancel?() }
-        panel.level = .screenSaver + 1
+        panel.level = frozenImage == nil ? .screenSaver + 1 : .screenSaver + 3
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
@@ -955,6 +956,7 @@ private struct CaptureAllInOneToolbarView: View {
 private final class AllInOneSelectionOverlayView: NSView {
     var onSelectionChanged: ((CGRect) -> Void)?
     var onCancel: (() -> Void)?
+    var passesThroughSelectionBody = false
 
     private enum DragOperation {
         case none
@@ -990,6 +992,20 @@ private final class AllInOneSelectionOverlayView: NSView {
     required init?(coder: NSCoder) { fatalError() }
 
     override var acceptsFirstResponder: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if passesThroughSelectionBody,
+           selectionRect.contains(point),
+           case .move? = CaptureSelectionGeometry.hitTarget(
+                at: point,
+                selectionRect: selectionRect,
+                hitSlop: hitSlop
+           ) {
+            return nil
+        }
+
+        return super.hitTest(point)
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()

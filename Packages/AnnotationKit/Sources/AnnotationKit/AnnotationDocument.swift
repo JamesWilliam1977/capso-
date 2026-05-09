@@ -91,6 +91,18 @@ public final class AnnotationDocument {
         cropRect = nil
     }
 
+    /// Updates the backing image size while keeping annotation coordinates meaningful.
+    /// Used when the visible canvas grows or shifts around already-created objects.
+    public func updateImageSizePreservingObjects(size: CGSize, objectOffset: CGSize = .zero) {
+        imageSize = size
+        cropRect = nil
+        if objectOffset != .zero {
+            for object in objects {
+                object.move(by: objectOffset)
+            }
+        }
+    }
+
     private func currentSnapshot() -> Snapshot {
         Snapshot(objects: objects.map { $0.copy() }, cropRect: cropRect, imageSize: imageSize)
     }

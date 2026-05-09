@@ -98,4 +98,29 @@ struct AnnotationDocumentTests {
         #expect(doc.objects.count == 0)
         #expect(doc.cropRect == nil)
     }
+
+    @Test("Update image size preserves and offsets objects without pushing undo")
+    @MainActor
+    func updateImageSizePreservesObjects() {
+        let doc = AnnotationDocument(imageSize: CGSize(width: 400, height: 300))
+        let line = LineObject(start: CGPoint(x: 20, y: 30), end: CGPoint(x: 120, y: 30))
+        doc.addObject(line)
+        doc.setCropRect(CGRect(x: 5, y: 5, width: 50, height: 50))
+        doc.undo()
+        #expect(doc.canUndo)
+
+        doc.updateImageSizePreservingObjects(
+            size: CGSize(width: 520, height: 380),
+            objectOffset: CGSize(width: 15, height: 25)
+        )
+
+        #expect(doc.imageSize == CGSize(width: 520, height: 380))
+        #expect(doc.cropRect == nil)
+        let movedLine = doc.objects[0] as? LineObject
+        #expect(movedLine?.start == CGPoint(x: 35, y: 55))
+        #expect(movedLine?.end == CGPoint(x: 135, y: 55))
+
+        doc.undo()
+        #expect(doc.objects.count == 0)
+    }
 }
