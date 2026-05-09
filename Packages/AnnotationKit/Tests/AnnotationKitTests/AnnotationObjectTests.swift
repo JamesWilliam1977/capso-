@@ -78,6 +78,37 @@ struct LineObjectTests {
         #expect(line.start == CGPoint(x: 15, y: 15))
         #expect(line.end == CGPoint(x: 55, y: 55))
     }
+
+    @Test("Line control point bends hit testing and travels with the line")
+    func controlPointBendsLine() {
+        let line = LineObject(
+            start: CGPoint(x: 0, y: 0),
+            end: CGPoint(x: 100, y: 0),
+            style: StrokeStyle(lineWidth: 4)
+        )
+        line.controlPoint = CGPoint(x: 50, y: 80)
+
+        #expect(line.bounds.contains(CGPoint(x: 50, y: 80)))
+        #expect(line.hitTest(point: CGPoint(x: 50, y: 40), threshold: 4))
+        #expect(!line.hitTest(point: CGPoint(x: 50, y: 0), threshold: 4))
+
+        line.move(by: CGSize(width: 10, height: -5))
+        #expect(line.start == CGPoint(x: 10, y: -5))
+        #expect(line.end == CGPoint(x: 110, y: -5))
+        #expect(line.controlPoint == CGPoint(x: 60, y: 75))
+    }
+
+    @Test("Line copy preserves bend state")
+    func copyPreservesControlPoint() {
+        let line = LineObject(start: CGPoint(x: 0, y: 0), end: CGPoint(x: 100, y: 0))
+        line.controlPoint = CGPoint(x: 40, y: 60)
+
+        let copy = line.copy() as? LineObject
+
+        #expect(copy?.start == line.start)
+        #expect(copy?.end == line.end)
+        #expect(copy?.controlPoint == line.controlPoint)
+    }
 }
 
 @Suite("ArrowObject")
