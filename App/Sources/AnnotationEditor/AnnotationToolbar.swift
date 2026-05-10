@@ -6,7 +6,9 @@ struct AnnotationToolbar: View {
     @Binding var currentTool: AnnotationTool
     @Binding var currentColor: AnnotationColor
     @Binding var lineWidth: CGFloat
+    @Binding var strokePattern: StrokePattern
     @Binding var filled: Bool
+    @Binding var redactionMode: RedactionMode
     @Binding var showBeautifyPanel: Bool
     /// True when an inline text edit is active (either via the text tool or
     /// by double-clicking an existing TextObject in select mode). When set,
@@ -53,6 +55,7 @@ struct AnnotationToolbar: View {
         HStack(spacing: 4) {
             toolButton(.select, icon: "cursorarrow", label: "Select")
             toolButton(.arrow, icon: "arrow.up.right", label: "Arrow")
+            toolButton(.line, icon: "line.diagonal", label: "Line")
             toolButton(.rectangle, icon: "rectangle", label: "Rectangle")
             toolButton(.ellipse, icon: "circle", label: "Ellipse")
             textToolButton
@@ -100,24 +103,7 @@ struct AnnotationToolbar: View {
     }
 
     private var colorGroup: some View {
-        HStack(spacing: 3) {
-            ForEach(AnnotationColor.allCases, id: \.self) { color in
-                Button(action: { currentColor = color }) {
-                    Circle()
-                        .fill(Color(cgColor: color.cgColor))
-                        .frame(width: 19, height: 19)
-                        .overlay(Circle().stroke(currentColor == color ? Color.accentColor : Color.clear, lineWidth: 2))
-                        .overlay(Circle().stroke(Color.black.opacity(0.24), lineWidth: 0.5))
-                        .padding(2)
-                        .background(
-                            Circle()
-                                .fill(currentColor == color ? Color.accentColor.opacity(0.12) : Color.clear)
-                        )
-                }
-                .buttonStyle(.plain)
-                .help(Text(color.rawValue.capitalized))
-            }
-        }
+        AnnotationColorControls(currentColor: $currentColor)
     }
 
     private var strokeGroup: some View {
@@ -128,9 +114,21 @@ struct AnnotationToolbar: View {
                     .frame(width: 80)
                     .help("Font Size: \(Int(lineWidth))")
             } else if currentTool == .pixelate {
-                Slider(value: $lineWidth, in: 4...48, step: 2)
-                    .frame(width: 80)
-                    .help("Block Size: \(Int(lineWidth))")
+                Picker("", selection: $redactionMode) {
+                    ForEach(RedactionMode.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 184)
+                .help("Redaction Mode")
+
+                if redactionMode != .solid {
+                    Slider(value: $lineWidth, in: 4...48, step: 2)
+                        .frame(width: 80)
+                        .help("Block Size: \(Int(lineWidth))")
+                }
             } else if currentTool == .counter {
                 Slider(value: $lineWidth, in: 12...40, step: 1)
                     .frame(width: 80)
@@ -144,8 +142,22 @@ struct AnnotationToolbar: View {
                     .frame(width: 80)
                     .help("Line Width: \(Int(lineWidth))")
             }
+            if currentTool == .arrow || currentTool == .line {
+                Picker("", selection: $strokePattern) {
+                    ForEach(StrokePattern.allCases, id: \.self) { pattern in
+                        StrokePatternGlyph(pattern: pattern)
+                            .tag(pattern)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 104)
+                .help("Stroke Pattern")
+            }
             // Fill toggle is meaningless for counter / highlighter / text.
             if currentTool != .counter
+                && currentTool != .arrow
+                && currentTool != .line
                 && currentTool != .highlighter
                 && !isFontSizeMode {
                 Toggle(isOn: $filled) {
@@ -284,5 +296,29 @@ struct AnnotationToolbar: View {
     private func actionButtonStroke(isPrimary: Bool) -> some View {
         RoundedRectangle(cornerRadius: 6, style: .continuous)
             .stroke(isPrimary ? Color.white.opacity(0.18) : Color.primary.opacity(0.08), lineWidth: 0.5)
+    }
+}
+
+struct StrokePatternGlyph: View {
+    let pattern: StrokePattern
+
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            path.move(to: CGPoint(x: 3, y: size.height / 2))
+            path.addLine(to: CGPoint(x: size.width - 3, y: size.height / 2))
+
+            let style: SwiftUI.StrokeStyle
+            switch pattern {
+            case .solid:
+                style = SwiftUI.StrokeStyle(lineWidth: 2, lineCap: .round)
+            case .dashed:
+                style = SwiftUI.StrokeStyle(lineWidth: 2, lineCap: .round, dash: [7, 5])
+            case .dotted:
+                style = SwiftUI.StrokeStyle(lineWidth: 2.4, lineCap: .round, dash: [0, 5])
+            }
+            context.stroke(path, with: .color(.primary), style: style)
+        }
+        .frame(width: 22, height: 14)
     }
 }

@@ -8,6 +8,7 @@ struct AnnotationCanvasView: NSViewRepresentable {
     let sourceImage: CGImage
     let currentTool: AnnotationTool
     let currentStyle: AnnotationKit.StrokeStyle
+    let redactionMode: RedactionMode
     /// Font size for the text tool / active inline edit. Bound to the
     /// font-size slider in SwiftUI.
     let textFontSize: CGFloat
@@ -15,6 +16,7 @@ struct AnnotationCanvasView: NSViewRepresentable {
     let refreshTrigger: Int
     var textRegions: [CGRect] = []
     var commitEditingTrigger: Int = 0
+    var onDocumentChanged: (() -> Void)?
     var onSwitchToSelect: (() -> Void)?
     /// Called when the inline text editor appears. Passes the effective
     /// fontSize (existing object's size when re-editing, current slider
@@ -30,7 +32,7 @@ struct AnnotationCanvasView: NSViewRepresentable {
     /// several in a row. Text and crop intentionally stay one-shot: text has
     /// its own inline-edit flow and crop is naturally one-per-image.
     private static let stickyTools: Set<AnnotationTool> = [
-        .arrow, .rectangle, .ellipse, .pixelate,
+        .arrow, .line, .rectangle, .ellipse, .pixelate,
         .counter, .freehand, .highlighter
     ]
 
@@ -40,9 +42,11 @@ struct AnnotationCanvasView: NSViewRepresentable {
         view.sourceImage = sourceImage
         view.currentTool = currentTool
         view.currentStyle = currentStyle
+        view.redactionMode = redactionMode
         view.currentTextFontSize = textFontSize
         view.zoomScale = zoomScale
         view.textRegions = textRegions
+        view.onDocumentChanged = { onDocumentChanged?() }
         view.onObjectCreated = {
             if !Self.stickyTools.contains(currentTool) {
                 onSwitchToSelect?()
@@ -59,11 +63,14 @@ struct AnnotationCanvasView: NSViewRepresentable {
 
     func updateNSView(_ nsView: AnnotationCanvasNSView, context: Context) {
         let toolChanged = nsView.currentTool != currentTool
+        nsView.sourceImage = sourceImage
         nsView.currentTool = currentTool
         nsView.currentStyle = currentStyle
+        nsView.redactionMode = redactionMode
         nsView.currentTextFontSize = textFontSize
         nsView.zoomScale = zoomScale
         nsView.textRegions = textRegions
+        nsView.onDocumentChanged = { onDocumentChanged?() }
         nsView.onObjectCreated = {
             if !Self.stickyTools.contains(currentTool) {
                 onSwitchToSelect?()

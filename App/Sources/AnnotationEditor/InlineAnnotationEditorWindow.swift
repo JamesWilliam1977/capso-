@@ -99,9 +99,12 @@ private struct InlineAnnotationEditorView: View {
     @AppStorage("annotationBlockSize") private var savedBlockSize: Double = 12
     @AppStorage("annotationCounterSize") private var savedCounterSize: Double = 20
     @AppStorage("annotationHighlighterWidth") private var savedHighlighterWidth: Double = 20
+    @AppStorage("annotationRedactionMode") private var redactionMode: RedactionMode = .pixelate
     @AppStorage("annotationTextFontSize") private var savedTextFontSize: Double = 48
+    @AppStorage("annotationStrokePattern") private var savedStrokePattern: StrokePattern = .solid
 
     @State private var lineWidth: CGFloat = 3
+    @State private var strokePattern: StrokePattern = .solid
     @State private var isEditingText = false
     @State private var refreshTrigger = 0
     @State private var commitEditingTrigger = 0
@@ -123,7 +126,8 @@ private struct InlineAnnotationEditorView: View {
             color: currentColor,
             lineWidth: lineWidth,
             opacity: currentTool == .highlighter ? 0.35 : 1.0,
-            filled: filled
+            filled: filled,
+            pattern: strokePattern
         )
     }
 
@@ -173,6 +177,7 @@ private struct InlineAnnotationEditorView: View {
                 sourceImage: sourceImage,
                 currentTool: currentTool,
                 currentStyle: currentStyle,
+                redactionMode: redactionMode,
                 textFontSize: effectiveTextFontSize,
                 zoomScale: displayScale,
                 refreshTrigger: refreshTrigger,
@@ -206,7 +211,9 @@ private struct InlineAnnotationEditorView: View {
                 currentTool: $currentTool,
                 currentColor: $currentColor,
                 lineWidth: $lineWidth,
+                strokePattern: $strokePattern,
                 filled: $filled,
+                redactionMode: $redactionMode,
                 isEditingText: isEditingText,
                 canUndo: document.canUndo,
                 canRedo: document.canRedo,
@@ -230,6 +237,7 @@ private struct InlineAnnotationEditorView: View {
         .background(Color.clear)
         .onAppear {
             lineWidth = savedWidth(for: currentTool)
+            strokePattern = savedStrokePattern
             Task {
                 if let regions = try? await TextRecognizer.recognize(
                     image: sourceImage,
@@ -250,7 +258,12 @@ private struct InlineAnnotationEditorView: View {
             updateSelectedStyle()
             persistWidth(newValue, for: currentTool)
         }
+        .onChange(of: strokePattern) { _, newValue in
+            savedStrokePattern = newValue
+            updateSelectedStyle()
+        }
         .onChange(of: filled) { _, _ in updateSelectedStyle() }
+        .onChange(of: redactionMode) { _, _ in updateSelectedStyle() }
     }
 
     private func savedWidth(for tool: AnnotationTool) -> CGFloat {
@@ -277,6 +290,8 @@ private struct InlineAnnotationEditorView: View {
         if let obj = document.selectedObject {
             if let pixelate = obj as? PixelateObject {
                 pixelate.blockSize = lineWidth
+                pixelate.mode = redactionMode
+                pixelate.style = currentStyle
             } else if let counter = obj as? CounterObject {
                 counter.radius = lineWidth
                 counter.style = AnnotationKit.StrokeStyle(
@@ -338,7 +353,9 @@ private struct InlineAnnotationToolbar: View {
     @Binding var currentTool: AnnotationTool
     @Binding var currentColor: AnnotationColor
     @Binding var lineWidth: CGFloat
+    @Binding var strokePattern: StrokePattern
     @Binding var filled: Bool
+    @Binding var redactionMode: RedactionMode
 
     let isEditingText: Bool
     let canUndo: Bool
@@ -359,6 +376,7 @@ private struct InlineAnnotationToolbar: View {
             HStack(spacing: 4) {
                 toolButton(.select)
                 toolButton(.arrow)
+                toolButton(.line)
                 toolButton(.rectangle)
                 toolButton(.ellipse)
                 toolButton(.text)
@@ -370,31 +388,52 @@ private struct InlineAnnotationToolbar: View {
 
             divider
 
-            HStack(spacing: 3) {
-                ForEach(AnnotationColor.allCases, id: \.self) { color in
-                    Button(action: { currentColor = color }) {
-                        Circle()
-                            .fill(Color(cgColor: color.cgColor))
-                            .frame(width: 17, height: 17)
-                            .overlay(
-                                Circle()
-                                    .stroke(currentColor == color ? Color.white : Color.clear, lineWidth: 2)
-                            )
-                            .overlay(Circle().stroke(Color.black.opacity(0.35), lineWidth: 0.5))
-                    }
-                    .buttonStyle(.plain)
-                    .help(localizedColorName(for: color))
-                }
-            }
+            AnnotationColorControls(
+                currentColor: $currentColor,
+                swatchSize: 17,
+                selectedRingColor: .white
+            )
 
             divider
 
             HStack(spacing: 7) {
-                Slider(value: $lineWidth, in: sliderRange, step: sliderStep)
-                    .frame(width: 82)
-                    .help(sliderHelp)
+                if !(currentTool == .pixelate && redactionMode == .solid) {
+                    Slider(value: $lineWidth, in: sliderRange, step: sliderStep)
+                        .frame(width: 82)
+                        .help(sliderHelp)
+                }
 
-                if currentTool != .counter && currentTool != .highlighter && !isFontSizeMode {
+                if currentTool == .pixelate {
+                    Picker("", selection: $redactionMode) {
+                        ForEach(RedactionMode.allCases, id: \.self) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 168)
+                    .help("Redaction Mode")
+                }
+
+                if currentTool == .arrow || currentTool == .line {
+                    Picker("", selection: $strokePattern) {
+                        ForEach(StrokePattern.allCases, id: \.self) { pattern in
+                            StrokePatternGlyph(pattern: pattern)
+                                .tag(pattern)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 104)
+                    .help("Stroke Pattern")
+                }
+
+                if currentTool != .counter
+                    && currentTool != .arrow
+                    && currentTool != .line
+                    && currentTool != .highlighter
+                    && currentTool != .pixelate
+                    && !isFontSizeMode {
                     iconButton(
                         systemName: filled ? "square.fill" : "square",
                         help: "Fill Shape",
@@ -536,6 +575,7 @@ private struct InlineAnnotationToolbar: View {
         switch tool {
         case .select: return "cursorarrow"
         case .arrow: return "arrow.up.right"
+        case .line: return "line.diagonal"
         case .rectangle: return "rectangle"
         case .ellipse: return "circle"
         case .text: return "textformat"
@@ -550,6 +590,7 @@ private struct InlineAnnotationToolbar: View {
         switch tool {
         case .select: return "Select"
         case .arrow: return "Arrow"
+        case .line: return "Line"
         case .rectangle: return "Rectangle"
         case .ellipse: return "Ellipse"
         case .text: return "Text"
@@ -560,16 +601,4 @@ private struct InlineAnnotationToolbar: View {
         }
     }
 
-    private func localizedColorName(for color: AnnotationColor) -> String {
-        switch color {
-        case .red: return String(localized: "Red")
-        case .orange: return String(localized: "Orange")
-        case .yellow: return String(localized: "Yellow")
-        case .green: return String(localized: "Green")
-        case .blue: return String(localized: "Blue")
-        case .purple: return String(localized: "Purple")
-        case .white: return String(localized: "White")
-        case .black: return String(localized: "Black")
-        }
-    }
 }
