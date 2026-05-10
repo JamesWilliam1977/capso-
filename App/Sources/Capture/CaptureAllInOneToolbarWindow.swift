@@ -15,6 +15,8 @@ final class CaptureAllInOneToolbarWindow {
     private var annotationOverlay: CaptureAllInOneAnnotationOverlay?
     private var globalEscMonitor: Any?
     private var localEscMonitor: Any?
+    private var globalSelectionMouseMonitor: Any?
+    private var localSelectionMouseMonitor: Any?
     private var screenLocalSelectionRect: CGRect
     private let toolbarState: CaptureAllInOneToolbarState
     private let presets: [CapturePreset]
@@ -76,6 +78,7 @@ final class CaptureAllInOneToolbarWindow {
         removeEscMonitor()
         annotationOverlay?.close()
         annotationOverlay = nil
+        removeSelectionMouseMonitor()
         toolbarWindow?.close()
         toolbarWindow = nil
         selectionOverlayWindow?.close()
@@ -135,6 +138,7 @@ final class CaptureAllInOneToolbarWindow {
         selectionOverlayWindow = panel
         panel.orderFrontRegardless()
         panel.makeKey()
+        installSelectionMouseMonitorIfNeeded()
     }
 
     private func showToolbar() {
@@ -298,6 +302,7 @@ final class CaptureAllInOneToolbarWindow {
         if shouldRefreshAnnotationOverlay(isLive: isLive) {
             updateAnnotationOverlayIfPossible(isLive: isLive)
         }
+        updateSelectionMouseHandling()
     }
 
     private func updateToolbarState() {
@@ -441,6 +446,46 @@ final class CaptureAllInOneToolbarWindow {
             NSEvent.removeMonitor(localEscMonitor)
             self.localEscMonitor = nil
         }
+    }
+
+    private func installSelectionMouseMonitorIfNeeded() {
+        guard frozenImage != nil else { return }
+
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDown, .leftMouseDragged, .leftMouseUp]
+        globalSelectionMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] _ in
+            Task { @MainActor in self?.updateSelectionMouseHandling() }
+        }
+        localSelectionMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            self?.updateSelectionMouseHandling()
+            return event
+        }
+        updateSelectionMouseHandling()
+    }
+
+    private func removeSelectionMouseMonitor() {
+        if let globalSelectionMouseMonitor {
+            NSEvent.removeMonitor(globalSelectionMouseMonitor)
+            self.globalSelectionMouseMonitor = nil
+        }
+        if let localSelectionMouseMonitor {
+            NSEvent.removeMonitor(localSelectionMouseMonitor)
+            self.localSelectionMouseMonitor = nil
+        }
+    }
+
+    private func updateSelectionMouseHandling() {
+        guard frozenImage != nil,
+              let selectionOverlayWindow,
+              let selectionOverlayView else {
+            return
+        }
+
+        let mouseLocation = NSEvent.mouseLocation
+        let screenLocalPoint = CGPoint(
+            x: mouseLocation.x - screen.frame.minX,
+            y: mouseLocation.y - screen.frame.minY
+        )
+        selectionOverlayWindow.ignoresMouseEvents = !selectionOverlayView.wantsMouseEvents(at: screenLocalPoint)
     }
 }
 
@@ -1024,12 +1069,7 @@ private final class AllInOneSelectionOverlayView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         if passesThroughSelectionBody,
-           selectionRect.contains(point),
-           case .move? = CaptureSelectionGeometry.hitTarget(
-                at: point,
-                selectionRect: selectionRect,
-                hitSlop: hitSlop
-           ) {
+           !wantsMouseEvents(at: point) {
             return nil
         }
 
@@ -1122,14 +1162,15 @@ private final class AllInOneSelectionOverlayView: NSView {
             )
         }
 
-        let bodyRect = rect.insetBy(dx: slop, dy: slop)
-        if bodyRect.width > 0, bodyRect.height > 0 {
-            addCursorRect(bodyRect, cursor: .openHand)
+        if !passesThroughSelectionBody {
+            let bodyRect = rect.insetBy(dx: slop, dy: slop)
+            if bodyRect.width > 0, bodyRect.height > 0 {
+                addCursorRect(bodyRect, cursor: .openHand)
+            }
         }
     }
 
     override func mouseDown(with event: NSEvent) {
-        window?.makeKey()
         window?.makeFirstResponder(self)
 
         let point = convert(event.locationInWindow, from: nil)
@@ -1267,6 +1308,8 @@ private final class AllInOneSelectionOverlayView: NSView {
     }
 
     private func updateCursor(for point: CGPoint) {
+        guard wantsMouseEvents(at: point) else { return }
+
         if activePreset.isFixedSize {
             if selectionRect.contains(point) {
                 NSCursor.openHand.set()
@@ -1284,6 +1327,23 @@ private final class AllInOneSelectionOverlayView: NSView {
             ),
             at: point,
         ).set()
+    }
+
+    func wantsMouseEvents(at point: CGPoint) -> Bool {
+        guard passesThroughSelectionBody else { return true }
+
+        switch CaptureSelectionGeometry.hitTarget(
+            at: point,
+            selectionRect: selectionRect,
+            hitSlop: hitSlop
+        ) {
+        case .resize:
+            return true
+        case .move:
+            return false
+        case nil:
+            return true
+        }
     }
 
     private func cursor(for target: CaptureSelectionHitTarget?, at point: CGPoint) -> NSCursor {
