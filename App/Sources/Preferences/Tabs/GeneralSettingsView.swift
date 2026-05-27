@@ -201,14 +201,7 @@ private struct ExternalLinkButton: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(isHovered ? Color.white.opacity(0.1) : Color.white.opacity(0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 5)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
-            )
+            .preferencesGlassActionBackground(isHovered: isHovered)
         }
         .buttonStyle(.plain)
         .foregroundStyle(.secondary)

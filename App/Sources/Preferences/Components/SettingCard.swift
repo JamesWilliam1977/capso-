@@ -7,12 +7,7 @@ struct SettingCard<Content: View>: View {
         VStack(spacing: 0) {
             content
         }
-        .background(Color.white.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.08), lineWidth: 0.5)
-        )
+        .preferencesGlassCard()
     }
 }
 

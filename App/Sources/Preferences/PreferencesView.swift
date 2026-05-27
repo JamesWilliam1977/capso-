@@ -75,7 +75,18 @@ struct PreferencesView: View {
         }
     }
 
+    @ViewBuilder
     private var sidebar: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 8) {
+                sidebarContent
+            }
+        } else {
+            sidebarContent
+        }
+    }
+
+    private var sidebarContent: some View {
         VStack(spacing: 2) {
             ForEach(PreferencesTab.allCases, id: \.self) { tab in
                 SidebarButton(tab: tab, isSelected: selectedTab == tab) {
@@ -92,6 +103,16 @@ struct PreferencesView: View {
 
     @ViewBuilder
     private var content: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer(spacing: 18) {
+                scrollContent
+            }
+        } else {
+            scrollContent
+        }
+    }
+
+    private var scrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 switch selectedTab {
@@ -141,13 +162,7 @@ private struct SidebarButton: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(
-                        isSelected ? Color.white.opacity(0.12) :
-                        isHovered ? Color.white.opacity(0.08) : Color.clear
-                    )
-            )
+            .preferencesSidebarSelectionBackground(isSelected: isSelected, isHovered: isHovered)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
