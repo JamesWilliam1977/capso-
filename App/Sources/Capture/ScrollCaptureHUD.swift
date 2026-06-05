@@ -13,6 +13,8 @@ final class ScrollCaptureOverlay {
     private let viewModel = ScrollCaptureViewModel()
     private var localKeyMonitor: Any?
     private var globalKeyMonitor: Any?
+    private var keyEventTap: CFMachPort?
+    private var keyEventTapRunLoopSource: CFRunLoopSource?
 
     var onStart: (() -> Void)?
     var onDone: (() -> Void)?
@@ -52,6 +54,14 @@ final class ScrollCaptureOverlay {
             NSEvent.removeMonitor(globalKeyMonitor)
             self.globalKeyMonitor = nil
         }
+        if let source = keyEventTapRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            keyEventTapRunLoopSource = nil
+        }
+        if let tap = keyEventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            keyEventTap = nil
+        }
         borderWindow?.orderOut(nil)
         borderWindow = nil
         controlsWindow?.orderOut(nil)
@@ -86,17 +96,55 @@ final class ScrollCaptureOverlay {
         }
 
         globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return } // ESC
             Task { @MainActor in
-                switch event.keyCode {
-                case 53: // ESC
-                    self?.onCancel?()
-                case 36, 76: // Return, keypad Enter
-                    self?.startCaptureFromKeyboard()
-                default:
-                    break
-                }
+                self?.onCancel?()
             }
         }
+
+        installKeyEventTap()
+    }
+
+    private func installKeyEventTap() {
+        let eventMask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        let refcon = Unmanaged.passUnretained(self).toOpaque()
+
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: { _, type, event, refcon in
+                guard type == .keyDown,
+                      let refcon else {
+                    return Unmanaged.passUnretained(event)
+                }
+
+                let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+                guard keyCode == 53 || keyCode == 36 || keyCode == 76 else {
+                    return Unmanaged.passUnretained(event)
+                }
+
+                let overlay = Unmanaged<ScrollCaptureOverlay>.fromOpaque(refcon).takeUnretainedValue()
+                Task { @MainActor in
+                    if keyCode == 53 {
+                        overlay.onCancel?()
+                    } else {
+                        overlay.startCaptureFromKeyboard()
+                    }
+                }
+                return nil
+            },
+            userInfo: refcon
+        ) else {
+            return
+        }
+
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        keyEventTap = tap
+        keyEventTapRunLoopSource = source
     }
 
     private func startCaptureFromKeyboard() {
