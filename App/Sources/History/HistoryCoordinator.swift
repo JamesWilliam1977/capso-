@@ -1,6 +1,7 @@
 // App/Sources/History/HistoryCoordinator.swift
 import AppKit
 import AVFoundation
+import ImageIO
 import Observation
 import CaptureKit
 import ExportKit
@@ -21,6 +22,11 @@ final class HistoryCoordinator {
     var shareCoordinator: ShareCoordinator?
 
     private var historyWindow: HistoryWindow?
+    private var annotationWindow: AnnotationEditorWindow?
+    private var pinnedControllers: [PinnedScreenshotController] = []
+    private let dragFileStore = QuickAccessDragFileStore()
+    private var dragFileURLs: [UUID: URL] = [:]
+    private var dragPreparationTasks: [UUID: Task<Void, Never>] = [:]
 
     init(settings: AppSettings) {
         self.settings = settings
@@ -287,6 +293,7 @@ final class HistoryCoordinator {
             try store.delete(id: entry.id)
             let entryDir = store.entriesDirectory.appendingPathComponent(entry.id.uuidString, isDirectory: true)
             try? FileManager.default.removeItem(at: entryDir)
+            clearDragFileCache(for: entry)
             loadEntries()
         } catch {
             print("Failed to delete history entry: \(error)")
@@ -297,6 +304,7 @@ final class HistoryCoordinator {
         guard let store else { return }
         do {
             try HistoryCleanup.clearAll(store: store)
+            clearDragFileCaches()
             loadEntries()
         } catch {
             print("Failed to clear history: \(error)")
@@ -320,16 +328,284 @@ final class HistoryCoordinator {
     }
 
     func loadFullImage(for entry: HistoryEntry) -> CGImage? {
-        guard let url = fullImageURL(for: entry),
-              let data = try? Data(contentsOf: url),
-              let provider = CGDataProvider(data: data as CFData),
-              let image = CGImage(
-                  pngDataProviderSource: provider,
-                  decode: nil,
-                  shouldInterpolate: true,
-                  intent: .defaultIntent
-              ) else { return nil }
-        return image
+        guard let url = fullImageURL(for: entry) else { return nil }
+        return Self.loadCGImage(from: url)
+    }
+
+    func prepareDragFile(for entry: HistoryEntry) {
+        guard isScreenshot(entry) else { return }
+        if let cachedURL = dragFileURLs[entry.id] {
+            if FileManager.default.isReadableFile(atPath: cachedURL.path) {
+                return
+            }
+            dragFileURLs[entry.id] = nil
+        }
+
+        guard dragFileURLs[entry.id] == nil,
+              dragPreparationTasks[entry.id] == nil,
+              let fullURL = fullImageURL(for: entry) else { return }
+
+        let id = entry.id
+        let preset = settings.screenshotOutputPreset
+        let date = entry.createdAt
+        let sourceAppName = entry.sourceAppName
+        let sourceWindowTitle = entry.sourceWindowTitle
+        let template = settings.screenshotFilenameTemplate
+
+        dragPreparationTasks[id] = Task { [weak self] in
+            let preparedURL = await Task.detached(priority: .utility) { () -> URL? in
+                guard let image = Self.loadCGImage(from: fullURL) else { return nil }
+                let store = QuickAccessDragFileStore()
+                return try? store.fileURL(
+                    for: image,
+                    id: id,
+                    preset: preset,
+                    date: date,
+                    sourceAppName: sourceAppName,
+                    sourceWindowTitle: sourceWindowTitle,
+                    template: template
+                )
+            }.value
+            let wasCancelled = Task.isCancelled
+
+            await MainActor.run {
+                guard let self else {
+                    if let preparedURL {
+                        try? FileManager.default.removeItem(at: preparedURL)
+                    }
+                    return
+                }
+
+                self.dragPreparationTasks[id] = nil
+                guard let preparedURL else { return }
+                if wasCancelled || self.dragFileURLs[id] != nil {
+                    try? FileManager.default.removeItem(at: preparedURL)
+                    return
+                }
+                self.dragFileURLs[id] = preparedURL
+            }
+        }
+    }
+
+    func dragFileURL(for entry: HistoryEntry) -> URL? {
+        guard isScreenshot(entry) else { return nil }
+        if let cachedURL = dragFileURLs[entry.id] {
+            if FileManager.default.isReadableFile(atPath: cachedURL.path) {
+                return cachedURL
+            }
+            dragFileURLs[entry.id] = nil
+        }
+
+        dragPreparationTasks[entry.id]?.cancel()
+        dragPreparationTasks[entry.id] = nil
+
+        guard let image = loadFullImage(for: entry) else { return nil }
+
+        do {
+            let fileURL = try dragFileStore.fileURL(
+                for: image,
+                id: entry.id,
+                preset: settings.screenshotOutputPreset,
+                date: entry.createdAt,
+                sourceAppName: entry.sourceAppName,
+                sourceWindowTitle: entry.sourceWindowTitle,
+                template: settings.screenshotFilenameTemplate
+            )
+            dragFileURLs[entry.id] = fileURL
+            return fileURL
+        } catch {
+            return nil
+        }
+    }
+
+    func editEntry(_ entry: HistoryEntry) {
+        guard isScreenshot(entry),
+              let image = loadFullImage(for: entry) else { return }
+
+        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }
+            ?? NSScreen.main
+
+        annotationWindow?.close()
+        annotationWindow = nil
+        let window = AnnotationEditorWindow(
+            image: image,
+            anchorScreen: screen,
+            sourceAppName: entry.sourceAppName,
+            sourceWindowTitle: entry.sourceWindowTitle,
+            captureDate: entry.createdAt,
+            screenshotOutputPreset: settings.screenshotOutputPreset,
+            screenshotFilenameTemplate: settings.screenshotFilenameTemplate,
+            onSave: { [weak self] rendered in
+                self?.replaceImage(for: entry, with: rendered)
+                self?.annotationWindow = nil
+            },
+            onCopy: { [weak self] rendered in
+                self?.copyImageToClipboard(rendered)
+                self?.annotationWindow = nil
+            },
+            onPin: { [weak self] rendered, frame in
+                self?.pinImage(
+                    rendered,
+                    anchor: frame,
+                    sourceAppName: entry.sourceAppName,
+                    sourceWindowTitle: entry.sourceWindowTitle,
+                    date: entry.createdAt
+                )
+                self?.annotationWindow = nil
+            },
+            onClose: { [weak self] in
+                self?.annotationWindow = nil
+            }
+        )
+        annotationWindow = window
+        window.show()
+    }
+
+    private func replaceImage(for entry: HistoryEntry, with image: CGImage) {
+        guard isScreenshot(entry),
+              let store,
+              let fullURL = fullImageURL(for: entry),
+              let thumbnailURL = thumbnailURL(for: entry) else { return }
+
+        Task.detached(priority: .utility) {
+            guard let pngData = ImageUtilities.pngData(from: image) else { return }
+            do {
+                try pngData.write(to: fullURL, options: [.atomic])
+                if let thumbnailData = ThumbnailGenerator.generateThumbnail(from: image) {
+                    try thumbnailData.write(to: thumbnailURL, options: [.atomic])
+                }
+
+                let updated = HistoryEntry(
+                    id: entry.id,
+                    createdAt: entry.createdAt,
+                    captureMode: entry.captureMode,
+                    imageWidth: image.width,
+                    imageHeight: image.height,
+                    sourceAppName: entry.sourceAppName,
+                    sourceAppBundleID: entry.sourceAppBundleID,
+                    sourceWindowTitle: entry.sourceWindowTitle,
+                    thumbnailFileName: entry.thumbnailFileName,
+                    fullImageFileName: entry.fullImageFileName,
+                    annotationFileName: entry.annotationFileName,
+                    fileSize: Int64(pngData.count),
+                    // The edited bitmap no longer matches any existing uploaded object.
+                    cloudURL: nil
+                )
+                try store.update(updated)
+                await MainActor.run {
+                    self.clearDragFileCache(for: entry)
+                    self.loadEntries()
+                }
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func isScreenshot(_ entry: HistoryEntry) -> Bool {
+        switch entry.captureMode {
+        case .area, .fullscreen, .window:
+            return true
+        case .recording, .gif:
+            return false
+        }
+    }
+
+    nonisolated private static func loadCGImage(from url: URL) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+
+    private func clearDragFileCache(for entry: HistoryEntry) {
+        clearDragFileCache(for: entry.id)
+    }
+
+    private func clearDragFileCache(for id: UUID) {
+        dragPreparationTasks[id]?.cancel()
+        dragPreparationTasks[id] = nil
+        if let fileURL = dragFileURLs.removeValue(forKey: id) {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        try? dragFileStore.removeFile(for: id)
+    }
+
+    private func clearDragFileCaches() {
+        for task in dragPreparationTasks.values {
+            task.cancel()
+        }
+        dragPreparationTasks.removeAll()
+        for fileURL in dragFileURLs.values {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        dragFileURLs.removeAll()
+    }
+
+    private func copyImageToClipboard(_ image: CGImage) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects([ImageUtilities.nsImage(from: image)])
+    }
+
+    private func pinImage(
+        _ image: CGImage,
+        anchor: CGRect?,
+        sourceAppName: String?,
+        sourceWindowTitle: String?,
+        date: Date
+    ) {
+        let controller = PinnedScreenshotController(
+            image: image,
+            anchorRect: anchor,
+            onCopy: { [weak self] in
+                self?.copyImageToClipboard(image)
+            },
+            onSave: { [weak self] in
+                self?.saveImageToExportLocation(
+                    image,
+                    sourceAppName: sourceAppName,
+                    sourceWindowTitle: sourceWindowTitle,
+                    date: date
+                )
+            },
+            onDidClose: { [weak self] controllerID in
+                self?.pinnedControllers.removeAll { $0.id == controllerID }
+            }
+        )
+        pinnedControllers.append(controller)
+        controller.show()
+    }
+
+    private func saveImageToExportLocation(
+        _ image: CGImage,
+        sourceAppName: String?,
+        sourceWindowTitle: String?,
+        date: Date
+    ) {
+        let preset = settings.screenshotOutputPreset
+        let data: Data? = switch preset.fileFormat {
+        case .png:
+            ImageUtilities.pngData(from: image)
+        case .jpeg:
+            ImageUtilities.jpegData(from: image, quality: preset.jpegQuality ?? 0.85)
+        case .mp4, .gif, .mov:
+            nil
+        }
+        guard let data else { return }
+
+        let directory = settings.screenshotMonthlyFolders
+            ? FileNaming.monthlyDirectory(in: settings.exportLocation)
+            : settings.exportLocation
+        let url = FileNaming.generateFileURL(
+            in: directory,
+            type: .screenshot,
+            format: preset.fileFormat,
+            date: date,
+            sourceAppName: sourceAppName,
+            sourceWindowTitle: sourceWindowTitle,
+            template: settings.screenshotFilenameTemplate
+        )
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? data.write(to: url)
     }
 
     func copyToClipboard(_ entry: HistoryEntry) {
