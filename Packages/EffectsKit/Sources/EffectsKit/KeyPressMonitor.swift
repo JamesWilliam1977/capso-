@@ -8,6 +8,8 @@ import CoreGraphics
 /// 1. Prefer a **listen-only** `CGEventTap` at the session level (same as KeyCastr)
 /// 2. Re-enable the tap if macOS disables it (`tapDisabledByTimeout` / user input)
 /// 3. Fall back to `NSEvent` global+local monitors if the tap cannot be created
+///
+/// KeyCastr is BSD-3-Clause; see `KeystrokeFormatter` and `THIRD_PARTY_NOTICES.md`.
 public final class KeyPressMonitor: @unchecked Sendable {
     public var onKeyDisplay: (@Sendable (String) -> Void)?
     /// Emits `true` for command-ish keystrokes (⌘/⌃) so the UI can break bezel lines.
