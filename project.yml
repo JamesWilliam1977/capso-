@@ -67,6 +67,8 @@ targets:
       - path: App/Resources
         excludes:
           - "Info.plist"
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.awesomemacapps.capso
