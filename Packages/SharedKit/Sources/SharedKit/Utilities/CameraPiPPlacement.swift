@@ -15,6 +15,40 @@ public enum CameraPiPPlacement {
     public static let recordingBottomOffset: CGFloat = 20
     public static let visibleMargin: CGFloat = 8
 
+    /// Opacity applied to the camera PiP when fade-on-hover is enabled and the pointer is over it
+    /// (so content behind the PiP is readable without moving the window).
+    public static let fadeHoverAlpha: CGFloat = 0.18
+
+    /// Full opacity for the camera PiP (idle, presentation mode, or feature disabled).
+    public static let fadeFullAlpha: CGFloat = 1.0
+
+    /// Target window opacity for optional fade-when-hover behavior.
+    /// PiP stays fully solid until the pointer enters it, then becomes nearly transparent.
+    /// Fullscreen / presentation mode always stays fully opaque.
+    public static func fadeAlpha(
+        enabled: Bool,
+        presentationModeActive: Bool,
+        pointerInside: Bool
+    ) -> CGFloat {
+        guard enabled, !presentationModeActive else { return fadeFullAlpha }
+        return pointerInside ? fadeHoverAlpha : fadeFullAlpha
+    }
+
+    /// Whether the PiP window should ignore mouse events so clicks hit content behind it.
+    /// Only while fade-on-hover is active, the pointer is over the PiP, and click-through is enabled.
+    /// Fullscreen / presentation mode never click-through.
+    public static func shouldClickThrough(
+        fadeEnabled: Bool,
+        clickThroughEnabled: Bool,
+        presentationModeActive: Bool,
+        pointerInside: Bool
+    ) -> Bool {
+        guard fadeEnabled, clickThroughEnabled, !presentationModeActive, pointerInside else {
+            return false
+        }
+        return true
+    }
+
     public static func frame(
         restoredFrame: CGRect?,
         defaultSize: CGSize,

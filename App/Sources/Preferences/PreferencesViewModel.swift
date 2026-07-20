@@ -440,6 +440,28 @@ final class PreferencesViewModel {
             }
         }
     }
+    var cameraPiPFadeWhenIdle: Bool {
+        get {
+            access(keyPath: \.cameraPiPFadeWhenIdle)
+            return settings.cameraPiPFadeWhenIdle
+        }
+        set {
+            withMutation(keyPath: \.cameraPiPFadeWhenIdle) {
+                settings.cameraPiPFadeWhenIdle = newValue
+            }
+        }
+    }
+    var cameraPiPClickThroughWhenFaded: Bool {
+        get {
+            access(keyPath: \.cameraPiPClickThroughWhenFaded)
+            return settings.cameraPiPClickThroughWhenFaded
+        }
+        set {
+            withMutation(keyPath: \.cameraPiPClickThroughWhenFaded) {
+                settings.cameraPiPClickThroughWhenFaded = newValue
+            }
+        }
+    }
 
     // MARK: Quick Access
     var quickAccessPosition: QuickAccessPosition {

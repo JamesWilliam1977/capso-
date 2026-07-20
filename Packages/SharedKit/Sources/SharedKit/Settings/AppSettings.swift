@@ -373,6 +373,22 @@ public final class AppSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: "cameraCustomSizePt") }
     }
 
+    /// When `true`, the camera PiP becomes nearly transparent while the pointer is over it
+    /// (so content behind it is readable without moving the window). Idle stays fully solid.
+    /// Presentation / fullscreen mode always stays opaque. Off by default.
+    /// Recorded output matches on-screen opacity.
+    public var cameraPiPFadeWhenIdle: Bool {
+        get { defaults.object(forKey: "cameraPiPFadeWhenIdle") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "cameraPiPFadeWhenIdle") }
+    }
+
+    /// When `true` (and fade-on-hover is also on), mouse clicks pass through the faded PiP
+    /// to whatever is behind it. Off by default. Has no effect while presentation mode is active.
+    public var cameraPiPClickThroughWhenFaded: Bool {
+        get { defaults.object(forKey: "cameraPiPClickThroughWhenFaded") as? Bool ?? false }
+        set { defaults.set(newValue, forKey: "cameraPiPClickThroughWhenFaded") }
+    }
+
     // MARK: Screenshots
     public var screenshotShowPreview: Bool {
         get { defaults.object(forKey: "screenshotShowPreview") as? Bool ?? true }

@@ -162,6 +162,46 @@ struct AppSettingsTests {
         #expect(settings.playShutterSound == true)
     }
 
+    @Test("Camera PiP fade when idle is disabled by default")
+    func defaultCameraPiPFadeWhenIdle() {
+        let suite = "test.cameraPiPFadeWhenIdle.default"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.cameraPiPFadeWhenIdle == false)
+    }
+
+    @Test("Camera PiP fade when idle persists across instances")
+    func cameraPiPFadeWhenIdlePersists() {
+        let suite = "test.cameraPiPFadeWhenIdle.persists"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let first = AppSettings(defaults: defaults)
+        first.cameraPiPFadeWhenIdle = true
+        let second = AppSettings(defaults: defaults)
+        #expect(second.cameraPiPFadeWhenIdle == true)
+    }
+
+    @Test("Camera PiP click-through when faded is disabled by default")
+    func defaultCameraPiPClickThroughWhenFaded() {
+        let suite = "test.cameraPiPClickThroughWhenFaded.default"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.cameraPiPClickThroughWhenFaded == false)
+    }
+
+    @Test("Camera PiP click-through when faded persists across instances")
+    func cameraPiPClickThroughWhenFadedPersists() {
+        let suite = "test.cameraPiPClickThroughWhenFaded.persists"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let first = AppSettings(defaults: defaults)
+        first.cameraPiPClickThroughWhenFaded = true
+        let second = AppSettings(defaults: defaults)
+        #expect(second.cameraPiPClickThroughWhenFaded == true)
+    }
+
     @Test("Diagnostic logging is disabled by default")
     func defaultDiagnosticLoggingEnabled() {
         let suite = "test.diagnosticLogging.default"

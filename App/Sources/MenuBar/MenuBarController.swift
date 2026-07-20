@@ -129,6 +129,8 @@ final class MenuBarController: NSObject {
         recordScreen.setShortcut(for: .recordScreen)
         menu.addItem(recordScreen)
 
+        menu.addItem(cameraPiPMenuItem())
+
         menu.addItem(.separator())
 
         let screenshotHistory = menuItem(String(localized: "Screenshot History..."), action: #selector(openHistory))
@@ -149,6 +151,62 @@ final class MenuBarController: NSObject {
         item.keyEquivalentModifierMask = modifiers
         item.target = self
         return item
+    }
+
+    /// Submenu for camera PiP interaction options (fade / click-through).
+    /// Kept in the status-item menu so users can disable click-through without opening Preferences
+    /// (click-through blocks dragging the PiP while active).
+    private func cameraPiPMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: String(localized: "Camera PiP"), action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+
+        let fadeItem = NSMenuItem(
+            title: String(localized: "Fade on Hover"),
+            action: #selector(toggleCameraPiPFadeOnHover),
+            keyEquivalent: ""
+        )
+        fadeItem.target = self
+        fadeItem.state = settings.cameraPiPFadeWhenIdle ? .on : .off
+        submenu.addItem(fadeItem)
+
+        let clickThroughItem = NSMenuItem(
+            title: String(localized: "Click Through When Faded"),
+            action: #selector(toggleCameraPiPClickThroughWhenFaded),
+            keyEquivalent: ""
+        )
+        clickThroughItem.target = self
+        clickThroughItem.state = settings.cameraPiPClickThroughWhenFaded ? .on : .off
+        clickThroughItem.isEnabled = settings.cameraPiPFadeWhenIdle
+        submenu.addItem(clickThroughItem)
+
+        item.submenu = submenu
+        return item
+    }
+
+    private func refreshCameraPiPMenuItems(in menu: NSMenu) {
+        for item in menu.items {
+            if let submenu = item.submenu {
+                refreshCameraPiPMenuItems(in: submenu)
+            }
+            switch item.action {
+            case #selector(toggleCameraPiPFadeOnHover):
+                item.state = settings.cameraPiPFadeWhenIdle ? .on : .off
+            case #selector(toggleCameraPiPClickThroughWhenFaded):
+                item.state = settings.cameraPiPClickThroughWhenFaded ? .on : .off
+                item.isEnabled = settings.cameraPiPFadeWhenIdle
+            default:
+                break
+            }
+        }
+    }
+
+    @objc private func toggleCameraPiPFadeOnHover() {
+        settings.cameraPiPFadeWhenIdle.toggle()
+    }
+
+    @objc private func toggleCameraPiPClickThroughWhenFaded() {
+        guard settings.cameraPiPFadeWhenIdle else { return }
+        settings.cameraPiPClickThroughWhenFaded.toggle()
     }
 
     /// Self-Timer menu row. Title is "Self-Timer" with the saved duration
@@ -274,5 +332,6 @@ extension MenuBarController: NSMenuDelegate {
             default: break
             }
         }
+        refreshCameraPiPMenuItems(in: menu)
     }
 }

@@ -11,6 +11,8 @@ final class CameraMenuBuilder: NSObject, NSMenuDelegate {
     var onShapeSelected: ((CameraShape) -> Void)?
     var onSizeSelected: ((SharedKit.CameraSize) -> Void)?
     var onMirrorToggled: ((Bool) -> Void)?
+    /// Called after fade / click-through options change so the PiP can re-apply interaction state.
+    var onHoverOptionsChanged: (() -> Void)?
     var onMenuClosed: (() -> Void)?
 
     /// The currently selected camera unique ID (nil = None).
@@ -84,6 +86,24 @@ final class CameraMenuBuilder: NSObject, NSMenuDelegate {
         )
         menu.addItem(mirrorItem)
 
+        menu.addItem(.separator())
+
+        let fadeItem = makeItem(
+            title: String(localized: "Fade on Hover"),
+            isSelected: settings.cameraPiPFadeWhenIdle,
+            action: #selector(toggleFadeOnHover)
+        )
+        menu.addItem(fadeItem)
+
+        let clickThroughItem = makeItem(
+            title: String(localized: "Click Through When Faded"),
+            isSelected: settings.cameraPiPClickThroughWhenFaded,
+            action: #selector(toggleClickThroughWhenFaded)
+        )
+        // Click-through only applies while fade-on-hover is enabled (moving PiP is blocked when active).
+        clickThroughItem.isEnabled = settings.cameraPiPFadeWhenIdle
+        menu.addItem(clickThroughItem)
+
         // Wire all items to this builder so selectors fire on it
         for item in menu.items where item.action != nil {
             item.target = self
@@ -145,6 +165,17 @@ final class CameraMenuBuilder: NSObject, NSMenuDelegate {
     @objc private func toggleMirror() {
         settings.cameraMirror.toggle()
         onMirrorToggled?(settings.cameraMirror)
+    }
+
+    @objc private func toggleFadeOnHover() {
+        settings.cameraPiPFadeWhenIdle.toggle()
+        onHoverOptionsChanged?()
+    }
+
+    @objc private func toggleClickThroughWhenFaded() {
+        guard settings.cameraPiPFadeWhenIdle else { return }
+        settings.cameraPiPClickThroughWhenFaded.toggle()
+        onHoverOptionsChanged?()
     }
 }
 

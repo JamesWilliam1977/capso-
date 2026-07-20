@@ -239,6 +239,34 @@ struct RecordingToolbarView: View {
                     Text("Mirror")
                 }
             }
+
+            Divider()
+
+            Button {
+                settings.cameraPiPFadeWhenIdle.toggle()
+                cameraMenuRevision += 1
+                onCameraSettingsChanged()
+            } label: {
+                if settings.cameraPiPFadeWhenIdle {
+                    Label("Fade on Hover", systemImage: "checkmark")
+                } else {
+                    Text("Fade on Hover")
+                }
+            }
+
+            Button {
+                guard settings.cameraPiPFadeWhenIdle else { return }
+                settings.cameraPiPClickThroughWhenFaded.toggle()
+                cameraMenuRevision += 1
+                onCameraSettingsChanged()
+            } label: {
+                if settings.cameraPiPClickThroughWhenFaded {
+                    Label("Click Through When Faded", systemImage: "checkmark")
+                } else {
+                    Text("Click Through When Faded")
+                }
+            }
+            .disabled(!settings.cameraPiPFadeWhenIdle)
         } label: {
             Image(systemName: cameraEnabled ? "camera.fill" : "camera")
                 .font(.system(size: 14))
