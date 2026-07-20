@@ -304,32 +304,32 @@ public final class AppSettings: @unchecked Sendable {
         set { defaults.set(newValue, forKey: "showKeyPressesWhileRecording") }
     }
 
-    /// Last dragged origin of the key-press overlay (AppKit bottom-left screen coords).
-    /// `nil` means use the default bottom-left placement on the recording display.
-    public var keyPressOverlayOriginX: Double? {
+    /// Last dragged offset of the key-press overlay from the recording frame origin
+    /// (AppKit bottom-left). `nil` means default bottom-leading placement inside the capture.
+    public var keyPressOverlayOffsetX: Double? {
         get {
-            guard defaults.object(forKey: "keyPressOverlayOriginX") != nil else { return nil }
-            return defaults.double(forKey: "keyPressOverlayOriginX")
+            guard defaults.object(forKey: "keyPressOverlayOffsetX") != nil else { return nil }
+            return defaults.double(forKey: "keyPressOverlayOffsetX")
         }
         set {
             if let newValue {
-                defaults.set(newValue, forKey: "keyPressOverlayOriginX")
+                defaults.set(newValue, forKey: "keyPressOverlayOffsetX")
             } else {
-                defaults.removeObject(forKey: "keyPressOverlayOriginX")
+                defaults.removeObject(forKey: "keyPressOverlayOffsetX")
             }
         }
     }
 
-    public var keyPressOverlayOriginY: Double? {
+    public var keyPressOverlayOffsetY: Double? {
         get {
-            guard defaults.object(forKey: "keyPressOverlayOriginY") != nil else { return nil }
-            return defaults.double(forKey: "keyPressOverlayOriginY")
+            guard defaults.object(forKey: "keyPressOverlayOffsetY") != nil else { return nil }
+            return defaults.double(forKey: "keyPressOverlayOffsetY")
         }
         set {
             if let newValue {
-                defaults.set(newValue, forKey: "keyPressOverlayOriginY")
+                defaults.set(newValue, forKey: "keyPressOverlayOffsetY")
             } else {
-                defaults.removeObject(forKey: "keyPressOverlayOriginY")
+                defaults.removeObject(forKey: "keyPressOverlayOffsetY")
             }
         }
     }

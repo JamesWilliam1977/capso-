@@ -871,6 +871,14 @@ final class RecordingCoordinator {
     private func startKeyPressOverlay() {
         guard settings.showKeyPressesWhileRecording else { return }
 
+        // Window-target capture only includes the selected app window, so Capso's HUD
+        // cannot appear in the file. Skip until we support compositing (if ever).
+        if case .window = selectedTarget {
+            return
+        }
+
+        guard let recordingFrame = appKitRecordingFrame() else { return }
+
         stopKeyPressOverlay()
 
         // Request Input Monitoring once so System Settings lists Capso.
@@ -881,7 +889,7 @@ final class RecordingCoordinator {
             }
         }
 
-        let window = KeyPressOverlayWindow(settings: settings, preferredScreen: selectedScreen)
+        let window = KeyPressOverlayWindow(settings: settings, recordingFrame: recordingFrame)
         window.show()
         keyPressOverlayWindow = window
 
@@ -894,6 +902,20 @@ final class RecordingCoordinator {
         }
         monitor.start()
         keyPressMonitor = monitor
+    }
+
+    /// Recording selection as an AppKit global frame (bottom-left origin).
+    /// Shared by controls, border, PiP, and the key-press HUD.
+    private func appKitRecordingFrame() -> CGRect? {
+        guard let screen = selectedScreen else { return nil }
+        let screenFrame = screen.frame
+        let viewY = screenFrame.height - selectedRect.origin.y - selectedRect.height
+        return CGRect(
+            x: selectedRect.origin.x + screenFrame.origin.x,
+            y: viewY + screenFrame.origin.y,
+            width: selectedRect.width,
+            height: selectedRect.height
+        )
     }
 
     private func stopKeyPressOverlay() {
@@ -959,16 +981,8 @@ final class RecordingCoordinator {
     }
 
     private func showRecordingControls() {
-        guard let screen = selectedScreen else { return }
-
-        let screenFrame = screen.frame
-        let viewY = screenFrame.height - selectedRect.origin.y - selectedRect.height
-        let recordingFrame = CGRect(
-            x: selectedRect.origin.x + screenFrame.origin.x,
-            y: viewY + screenFrame.origin.y,
-            width: selectedRect.width,
-            height: selectedRect.height
-        )
+        guard let screen = selectedScreen,
+              let recordingFrame = appKitRecordingFrame() else { return }
 
         controlsWindow = RecordingControlsWindow(
             recordingFrame: recordingFrame,
@@ -982,21 +996,13 @@ final class RecordingCoordinator {
     }
 
     private func showBorder() {
-        guard let screen = selectedScreen else { return }
-        // Convert selectedRect (display-local top-down) back to global AppKit
-        // coordinates for the border window's frame.
-        let screenFrame = screen.frame
-        let viewY = screenFrame.height - selectedRect.origin.y - selectedRect.height
+        guard let screen = selectedScreen,
+              let recordingFrame = appKitRecordingFrame() else { return }
         // Expand the border frame outward by the border width (3pt) so the
         // border is drawn entirely OUTSIDE the capture area. This prevents
         // ScreenCaptureKit from capturing the red border in the recording.
         let borderInset: CGFloat = 3
-        let borderFrame = CGRect(
-            x: selectedRect.origin.x + screenFrame.origin.x - borderInset,
-            y: viewY + screenFrame.origin.y - borderInset,
-            width: selectedRect.width + borderInset * 2,
-            height: selectedRect.height + borderInset * 2
-        )
+        let borderFrame = recordingFrame.insetBy(dx: -borderInset, dy: -borderInset)
         borderWindow = RecordingBorderWindow(frame: borderFrame, screen: screen)
         borderWindow?.show()
     }
@@ -1007,21 +1013,10 @@ final class RecordingCoordinator {
         cameraPiPWindow?.close()
         cameraPiPWindow = nil
 
-        var recordingFrame: CGRect?
-        if let screen = selectedScreen {
-            let screenFrame = screen.frame
-            let viewY = screenFrame.height - selectedRect.origin.y - selectedRect.height
-            recordingFrame = CGRect(
-                x: selectedRect.origin.x + screenFrame.origin.x,
-                y: viewY + screenFrame.origin.y,
-                width: selectedRect.width,
-                height: selectedRect.height
-            )
-        }
         cameraPiPWindow = CameraPiPWindow(
             cameraManager: cameraManager,
             settings: settings,
-            recordingFrame: recordingFrame,
+            recordingFrame: appKitRecordingFrame(),
             restorationState: restorationState
         )
         cameraPiPWindow?.show()

@@ -10,22 +10,34 @@ import SharedKit
 /// - After `keystrokeDelay` (~0.5s) idle, next key starts a new bezel
 /// - Each bezel fades after `fadeDelay` (~2s)
 /// - Resize via AppKit frames only (avoids SwiftUI display-cycle crashes)
+///
+/// Placement is relative to the active **display/area** recording frame so the HUD
+/// stays inside the capture. Window-target recording is not supported for this overlay.
 @MainActor
 final class KeyPressOverlayWindow: NSPanel {
     private let settings: AppSettings
+    /// Capture region in AppKit global coordinates (bottom-left origin).
+    private let recordingFrame: CGRect
     private var currentBezel: KeyPressBezelView?
-    private let margin: CGFloat = 24
+    private let margin: CGFloat = KeyPressOverlayPlacement.defaultMargin
     private let bezelSpacing: CGFloat = 10
     private let keystrokeDelay: TimeInterval = 0.5
     private let fadeDelay: TimeInterval = 2.0
     private let fadeDuration: TimeInterval = 0.2
     private let maxBezels = 6
 
-    init(settings: AppSettings, preferredScreen: NSScreen?) {
+    init(settings: AppSettings, recordingFrame: CGRect) {
         self.settings = settings
-        let screen = preferredScreen ?? NSScreen.main ?? NSScreen.screens.first!
-        let origin = Self.initialOrigin(settings: settings, screen: screen, margin: margin)
-        let frame = NSRect(origin: origin, size: NSSize(width: 80, height: 40))
+        self.recordingFrame = recordingFrame
+        let size = KeyPressOverlayPlacement.defaultSize
+        let origin = KeyPressOverlayPlacement.origin(
+            savedOffsetX: settings.keyPressOverlayOffsetX,
+            savedOffsetY: settings.keyPressOverlayOffsetY,
+            recordingFrame: recordingFrame,
+            size: size,
+            margin: KeyPressOverlayPlacement.defaultMargin
+        )
+        let frame = NSRect(origin: origin, size: size)
 
         super.init(
             contentRect: frame,
@@ -152,9 +164,8 @@ final class KeyPressOverlayWindow: NSPanel {
         guard let contentView else { return }
         let bezels = contentView.subviews.compactMap { $0 as? KeyPressBezelView }
         guard !bezels.isEmpty else {
-            var f = frame
-            f.size = NSSize(width: 80, height: 40)
-            setFrame(f, display: true)
+            let size = KeyPressOverlayPlacement.defaultSize
+            applyClampedFrame(CGRect(origin: frame.origin, size: size))
             return
         }
 
@@ -170,30 +181,40 @@ final class KeyPressOverlayWindow: NSPanel {
         }
 
         let height = max(40, y - bezelSpacing)
-        var windowFrame = frame
-        windowFrame.size = NSSize(width: maxWidth, height: height)
-        setFrame(windowFrame, display: true)
-        contentView.frame = NSRect(origin: .zero, size: windowFrame.size)
+        applyClampedFrame(CGRect(
+            x: frame.origin.x,
+            y: frame.origin.y,
+            width: maxWidth,
+            height: height
+        ))
+        contentView.frame = NSRect(origin: .zero, size: self.frame.size)
+    }
+
+    private func applyClampedFrame(_ proposed: CGRect) {
+        let clamped = KeyPressOverlayPlacement.clampedFrame(
+            proposed,
+            in: recordingFrame,
+            margin: margin
+        )
+        setFrame(clamped, display: true)
     }
 
     @objc private func handleMoved() {
-        settings.keyPressOverlayOriginX = frame.origin.x
-        settings.keyPressOverlayOriginY = frame.origin.y
-    }
-
-    private static func initialOrigin(
-        settings: AppSettings,
-        screen: NSScreen,
-        margin: CGFloat
-    ) -> NSPoint {
-        if let x = settings.keyPressOverlayOriginX, let y = settings.keyPressOverlayOriginY {
-            let point = NSPoint(x: x, y: y)
-            if screen.visibleFrame.insetBy(dx: -80, dy: -80).contains(point) {
-                return point
-            }
+        // Hard-clamp after drag so the HUD cannot leave the capture area.
+        let clamped = KeyPressOverlayPlacement.clampedFrame(
+            frame,
+            in: recordingFrame,
+            margin: margin
+        )
+        if clamped.origin != frame.origin {
+            setFrame(clamped, display: true)
         }
-        let visible = screen.visibleFrame
-        return NSPoint(x: visible.minX + margin, y: visible.minY + margin)
+        let off = KeyPressOverlayPlacement.offset(
+            windowOrigin: clamped.origin,
+            recordingFrame: recordingFrame
+        )
+        settings.keyPressOverlayOffsetX = off.x
+        settings.keyPressOverlayOffsetY = off.y
     }
 }
 
