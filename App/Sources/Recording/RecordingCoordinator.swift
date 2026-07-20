@@ -493,6 +493,11 @@ final class RecordingCoordinator {
             showCameraPiP(restorationState: restoredCameraPiPState)
         }
 
+        // Preflight Input Monitoring *before* capture so any System Settings
+        // prompt / alert is not baked into the recording. If denied, the session
+        // still records — just without the key HUD.
+        let keyPressOverlayReady = prepareKeyPressOverlayPermission()
+
         let actuallyStart: @MainActor () -> Void = { [weak self] in
             guard let self else { return }
             Task { @MainActor in
@@ -510,7 +515,9 @@ final class RecordingCoordinator {
                     }
                     try await self.recorder.startRecording(config: config, excludeWindowIDs: excludeIDs)
                     self.startClickHighlight()
-                    self.startKeyPressOverlay()
+                    if keyPressOverlayReady {
+                        self.startKeyPressOverlay()
+                    }
                     self.startCursorTelemetry()
                     self.showRecordingControls()
                 } catch {
@@ -868,26 +875,40 @@ final class RecordingCoordinator {
         clickHighlightWindow = nil
     }
 
-    private func startKeyPressOverlay() {
-        guard settings.showKeyPressesWhileRecording else { return }
+    /// Ensures Input Monitoring is available when the key HUD is enabled.
+    /// Must run **before** capture starts so permission UI is not recorded.
+    /// Returns `false` when the overlay should not be shown (setting off, window
+    /// target, or permission denied / continue without overlay).
+    private func prepareKeyPressOverlayPermission() -> Bool {
+        guard settings.showKeyPressesWhileRecording else { return false }
 
         // Window-target capture only includes the selected app window, so Capso's HUD
         // cannot appear in the file. Skip until we support compositing (if ever).
         if case .window = selectedTarget {
-            return
+            return false
         }
 
+        let permissions = PermissionManager()
+        if permissions.requestInputMonitoringPermission() {
+            return true
+        }
+
+        showInputMonitoringNeededAlert(permissions: permissions)
+        permissions.checkInputMonitoringPermission()
+        return permissions.inputMonitoringGranted
+    }
+
+    private func startKeyPressOverlay() {
+        guard settings.showKeyPressesWhileRecording else { return }
+        if case .window = selectedTarget { return }
         guard let recordingFrame = appKitRecordingFrame() else { return }
 
-        stopKeyPressOverlay()
+        // Permission was preflighted before capture; never create the HUD without access.
+        let permissions = PermissionManager()
+        permissions.checkInputMonitoringPermission()
+        guard permissions.inputMonitoringGranted else { return }
 
-        // Request Input Monitoring once so System Settings lists Capso.
-        if !CGPreflightListenEventAccess() {
-            _ = CGRequestListenEventAccess()
-            if !CGPreflightListenEventAccess() {
-                showInputMonitoringNeededAlert()
-            }
-        }
+        stopKeyPressOverlay()
 
         let window = KeyPressOverlayWindow(settings: settings, recordingFrame: recordingFrame)
         window.show()
@@ -925,7 +946,7 @@ final class RecordingCoordinator {
         keyPressOverlayWindow = nil
     }
 
-    private func showInputMonitoringNeededAlert() {
+    private func showInputMonitoringNeededAlert(permissions: PermissionManager) {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = String(localized: "Input Monitoring Needed")
@@ -935,8 +956,10 @@ final class RecordingCoordinator {
         alert.window.level = .screenSaver + 2
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
-            PermissionManager().openInputMonitoringSettings()
+            permissions.openInputMonitoringSettings()
         }
+        // "Continue Without Overlay" (and Settings without granting) → caller
+        // re-checks permission and skips starting the HUD.
     }
 
     private func startCursorTelemetry() {
