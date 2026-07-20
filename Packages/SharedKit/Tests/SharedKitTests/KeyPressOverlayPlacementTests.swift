@@ -67,6 +67,23 @@ struct KeyPressOverlayPlacementTests {
         #expect(clamped.maxY <= recording.maxY - margin + 0.001)
     }
 
+    @Test("Oversized HUD is fitted inside a tiny recording frame")
+    func oversizedHUDFitsTinyRecording() {
+        let tinyRecording = CGRect(x: 40, y: 80, width: 72, height: 36)
+        let oversized = CGRect(x: -200, y: 500, width: 180, height: 64)
+
+        let clamped = KeyPressOverlayPlacement.clampedFrame(
+            oversized,
+            in: tinyRecording,
+            margin: margin
+        )
+
+        #expect(clamped.minX >= tinyRecording.minX - 0.001)
+        #expect(clamped.minY >= tinyRecording.minY - 0.001)
+        #expect(clamped.maxX <= tinyRecording.maxX + 0.001)
+        #expect(clamped.maxY <= tinyRecording.maxY + 0.001)
+    }
+
     @Test("Offset round-trips against the recording frame")
     func offsetRoundTrip() {
         let windowOrigin = CGPoint(x: recording.minX + 33, y: recording.minY + 44)

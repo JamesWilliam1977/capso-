@@ -37,7 +37,11 @@ final class KeyPressOverlayWindow: NSPanel {
             size: size,
             margin: KeyPressOverlayPlacement.defaultMargin
         )
-        let frame = NSRect(origin: origin, size: size)
+        let frame = KeyPressOverlayPlacement.clampedFrame(
+            NSRect(origin: origin, size: size),
+            in: recordingFrame,
+            margin: KeyPressOverlayPlacement.defaultMargin
+        )
 
         super.init(
             contentRect: frame,
@@ -206,7 +210,7 @@ final class KeyPressOverlayWindow: NSPanel {
             in: recordingFrame,
             margin: margin
         )
-        if clamped.origin != frame.origin {
+        if clamped != frame {
             setFrame(clamped, display: true)
         }
         let off = KeyPressOverlayPlacement.offset(

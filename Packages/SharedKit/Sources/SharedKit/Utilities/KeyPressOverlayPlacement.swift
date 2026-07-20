@@ -60,16 +60,30 @@ public enum KeyPressOverlayPlacement {
         in recordingFrame: CGRect,
         margin: CGFloat = defaultMargin
     ) -> CGRect {
-        var result = frame
+        let recordingFrame = recordingFrame.standardized
+        var result = frame.standardized
+        result.size.width = max(0, min(result.width, recordingFrame.width))
+        result.size.height = max(0, min(result.height, recordingFrame.height))
+
+        // Preserve the requested margin when it fits. For a very small capture
+        // region, collapse it just enough to keep the entire HUD in-frame.
+        let horizontalMargin = min(
+            max(0, margin),
+            max(0, (recordingFrame.width - result.width) / 2)
+        )
+        let verticalMargin = min(
+            max(0, margin),
+            max(0, (recordingFrame.height - result.height) / 2)
+        )
         result.origin.x = clampedOrigin(
-            value: frame.origin.x,
-            lowerBound: recordingFrame.minX + margin,
-            upperBound: recordingFrame.maxX - frame.width - margin
+            value: result.origin.x,
+            lowerBound: recordingFrame.minX + horizontalMargin,
+            upperBound: recordingFrame.maxX - result.width - horizontalMargin
         )
         result.origin.y = clampedOrigin(
-            value: frame.origin.y,
-            lowerBound: recordingFrame.minY + margin,
-            upperBound: recordingFrame.maxY - frame.height - margin
+            value: result.origin.y,
+            lowerBound: recordingFrame.minY + verticalMargin,
+            upperBound: recordingFrame.maxY - result.height - verticalMargin
         )
         return result
     }

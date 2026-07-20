@@ -18,6 +18,16 @@ import EffectsKit
 import EditorKit
 import ShareKit
 
+enum KeyPressOverlayPermissionDecision: Equatable {
+    case showOverlay
+    case continueWithoutOverlay
+    case cancelRecording
+
+    static func forAlertResponse(_ response: NSApplication.ModalResponse) -> Self {
+        response == .alertFirstButtonReturn ? .cancelRecording : .continueWithoutOverlay
+    }
+}
+
 /// Orchestrates recording flow:
 /// 1. Show overlay for area selection (drag, or Space to switch to window selection)
 /// 2. Show recording toolbar (format, camera, mic, audio)
@@ -469,6 +479,17 @@ final class RecordingCoordinator {
         systemAudioEnabled: Bool,
         restoredCameraPiPState: CameraPiPRestorationState? = nil
     ) {
+        // Resolve Input Monitoring before creating any recording UI. Opening
+        // System Settings cancels this attempt, as the alert instructs the user
+        // to grant access and start recording again.
+        let keyPressOverlayDecision = prepareKeyPressOverlayPermission()
+        guard keyPressOverlayDecision != .cancelRecording else {
+            dismissToolbarUI()
+            selectedTarget = nil
+            return
+        }
+        let keyPressOverlayReady = keyPressOverlayDecision == .showOverlay
+
         currentRecordingFormat = format
         currentCameraEnabled = cameraEnabled
         currentMicEnabled = micEnabled
@@ -492,11 +513,6 @@ final class RecordingCoordinator {
             try? cameraManager.start()
             showCameraPiP(restorationState: restoredCameraPiPState)
         }
-
-        // Preflight Input Monitoring *before* capture so any System Settings
-        // prompt / alert is not baked into the recording. If denied, the session
-        // still records — just without the key HUD.
-        let keyPressOverlayReady = prepareKeyPressOverlayPermission()
 
         let actuallyStart: @MainActor () -> Void = { [weak self] in
             guard let self else { return }
@@ -877,25 +893,23 @@ final class RecordingCoordinator {
 
     /// Ensures Input Monitoring is available when the key HUD is enabled.
     /// Must run **before** capture starts so permission UI is not recorded.
-    /// Returns `false` when the overlay should not be shown (setting off, window
-    /// target, or permission denied / continue without overlay).
-    private func prepareKeyPressOverlayPermission() -> Bool {
-        guard settings.showKeyPressesWhileRecording else { return false }
+    /// Returns whether this attempt should show the overlay, continue without
+    /// it, or stop so the user can grant access and start recording again.
+    private func prepareKeyPressOverlayPermission() -> KeyPressOverlayPermissionDecision {
+        guard settings.showKeyPressesWhileRecording else { return .continueWithoutOverlay }
 
         // Window-target capture only includes the selected app window, so Capso's HUD
         // cannot appear in the file. Skip until we support compositing (if ever).
         if case .window = selectedTarget {
-            return false
+            return .continueWithoutOverlay
         }
 
         let permissions = PermissionManager()
         if permissions.requestInputMonitoringPermission() {
-            return true
+            return .showOverlay
         }
 
-        showInputMonitoringNeededAlert(permissions: permissions)
-        permissions.checkInputMonitoringPermission()
-        return permissions.inputMonitoringGranted
+        return showInputMonitoringNeededAlert(permissions: permissions)
     }
 
     private func startKeyPressOverlay() {
@@ -946,7 +960,9 @@ final class RecordingCoordinator {
         keyPressOverlayWindow = nil
     }
 
-    private func showInputMonitoringNeededAlert(permissions: PermissionManager) {
+    private func showInputMonitoringNeededAlert(
+        permissions: PermissionManager
+    ) -> KeyPressOverlayPermissionDecision {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = String(localized: "Input Monitoring Needed")
@@ -955,11 +971,11 @@ final class RecordingCoordinator {
         alert.addButton(withTitle: String(localized: "Continue Without Overlay"))
         alert.window.level = .screenSaver + 2
         let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
+        let decision = KeyPressOverlayPermissionDecision.forAlertResponse(response)
+        if decision == .cancelRecording {
             permissions.openInputMonitoringSettings()
         }
-        // "Continue Without Overlay" (and Settings without granting) → caller
-        // re-checks permission and skips starting the HUD.
+        return decision
     }
 
     private func startCursorTelemetry() {

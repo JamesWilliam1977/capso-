@@ -180,6 +180,8 @@ struct AppSettingsTests {
         first.showKeyPressesWhileRecording = true
         let second = AppSettings(defaults: defaults)
         #expect(second.showKeyPressesWhileRecording == true)
+    }
+
     @Test("Camera PiP fade on hover is disabled by default")
     func defaultCameraPiPFadeOnHover() {
         let suite = "test.cameraPiPFadeOnHover.default"
