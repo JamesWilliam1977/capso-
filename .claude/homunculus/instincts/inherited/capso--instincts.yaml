@@ -1,0 +1,361 @@
+# Instincts generated from https://github.com/JamesWilliam1977/capso-
+# Generated: 2026-05-01T03:56:47.906Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: capso--commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/capso-
+---
+
+# Capso  Commit Length
+
+## Action
+
+Write moderate-length commit messages (~63 characters)
+
+## Evidence
+
+- Average commit message length: 63 chars
+- Based on 3 commits
+
+---
+id: capso--naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/capso-
+---
+
+# Capso  Naming Files
+
+## Action
+
+Use PascalCase naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: PascalCase
+
+---
+id: capso--import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/capso-
+---
+
+# Capso  Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: capso--export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/capso-
+---
+
+# Capso  Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: capso--test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/capso-
+---
+
+# Capso  Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: capso--workflow-feature-implementation-with-shortcut-and-settings
+trigger: "when doing feature implementation with shortcut and settings"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JamesWilliam1977/capso-
+---
+
+# Capso  Workflow Feature Implementation With Shortcut And Settings
+
+## Action
+
+Follow the feature-implementation-with-shortcut-and-settings workflow:
+1. Implement feature logic in coordinator/controller (e.g., CaptureCoordinator.swift)
+2. Add new shortcut name to shortcut settings view (e.g., ShortcutSettingsView.swift)
+3. Wire shortcut in app delegate (e.g., AppDelegate.swift)
+4. Update settings model to persist new shortcut or feature state (e.g., AppSettings.swift)
+5. Update preferences view model if necessary (e.g., PreferencesViewModel.swift)
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: App/Sources/AppDelegate.swift, App/Sources/Capture/CaptureCoordinator.swift, App/Sources/Preferences/PreferencesViewModel.swift
+
+---
+id: capso--naming-files-pascalcase
+trigger: "When creating a new Swift file"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Naming Files Pascalcase
+
+## Action
+
+Name the file using PascalCase (e.g., CaptureCoordinator.swift)
+
+## Evidence
+
+- Pattern in files: App/Sources/Capture/CaptureCoordinator.swift, App/Sources/AppDelegate.swift
+
+---
+id: capso--naming-functions-camelcase
+trigger: "When defining a new function in Swift"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Naming Functions Camelcase
+
+## Action
+
+Name the function using camelCase (e.g., capturePreviousArea)
+
+## Evidence
+
+- Pattern in Swift codebase, inferred from language conventions and absence of snake_case functions
+
+---
+id: capso--naming-classes-pascalcase
+trigger: "When defining a new class in Swift"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Naming Classes Pascalcase
+
+## Action
+
+Name the class using PascalCase (e.g., CaptureCoordinator)
+
+## Evidence
+
+- Pattern in files: CaptureCoordinator.swift, PreferencesViewModel.swift
+
+---
+id: capso--naming-constants-screaming-snake-case
+trigger: "When declaring a constant in Swift"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Naming Constants Screaming Snake Case
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE
+
+## Evidence
+
+- Inferred from codeStyle.namingConventions.constants
+
+---
+id: capso--import-style-relative
+trigger: "When importing modules or files in Swift"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Import Style Relative
+
+## Action
+
+Use relative imports
+
+## Evidence
+
+- codeStyle.importStyle is 'relative'
+
+---
+id: capso--export-style-named
+trigger: "When exporting classes, structs, or functions in Swift"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Export Style Named
+
+## Action
+
+Use named exports
+
+## Evidence
+
+- codeStyle.exportStyle is 'named'
+
+---
+id: capso--git-commit-prefix-feat-refactor
+trigger: "When writing a commit message for a new feature or refactor"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Git Commit Prefix Feat Refactor
+
+## Action
+
+Prefix the commit message with 'feat:' for features and 'refactor:' for refactors
+
+## Evidence
+
+- Seen in commit: 'feat: capture previous area shortcut'
+- Seen in commit: 'refactor: narrow replay scope to area + fullscreen, reset pendingAction on replay'
+
+---
+id: capso--git-commit-merge-pr-format
+trigger: "When merging a pull request"
+confidence: 0.8
+domain: git
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Git Commit Merge Pr Format
+
+## Action
+
+Use the format 'Merge pull request #[number] from [branch]' in the commit message
+
+## Evidence
+
+- Seen in commit: 'Merge pull request #90 from fabianohx/feature/remember-last-spot-captured'
+
+---
+id: capso--git-commit-length-60-70
+trigger: "When writing a commit message"
+confidence: 0.7
+domain: git
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Git Commit Length 60 70
+
+## Action
+
+Keep the commit message concise, around 60-70 characters on average
+
+## Evidence
+
+- commits.averageLength is 63
+
+---
+id: capso--workflow-shortcut-feature
+trigger: "When adding a new global keyboard shortcut feature that requires UI, settings, and persistence changes"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Workflow Shortcut Feature
+
+## Action
+
+Follow the workflow: 1) Implement feature logic in coordinator/controller, 2) Add shortcut to settings UI, 3) Wire shortcut in app delegate, 4) Update settings model, 5) Update preferences view model if needed
+
+## Evidence
+
+- Workflow 'feature-implementation-with-shortcut-and-settings', commits and files involved
+
+---
+id: capso--testing-location-separate
+trigger: "When creating new tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Testing Location Separate
+
+## Action
+
+Place test files in a separate directory from source files
+
+## Evidence
+
+- architecture.testLocation is 'separate'
+
+---
+id: capso--testing-pattern-not-detected
+trigger: "When writing tests"
+confidence: 0.3
+domain: testing
+source: repo-analysis
+source_repo: JamesWilliam1977/capso-
+---
+
+# Capso  Testing Pattern Not Detected
+
+## Action
+
+No specific test writing pattern detected; follow standard Swift/XCTest practices
+
+## Evidence
+
+- No explicit test file patterns or examples detected in provided data
+
