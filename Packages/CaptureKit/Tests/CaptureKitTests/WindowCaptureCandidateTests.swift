@@ -4,14 +4,29 @@ import Testing
 
 @Suite("Window capture candidates")
 struct WindowCaptureCandidateTests {
-    @Test("Includes the system menu bar without an owning application")
-    func includesSystemMenuBar() {
+    @Test("Includes an unlabeled system menu bar without an owning application")
+    func includesUnlabeledSystemMenuBar() {
         #expect(ContentEnumerator.isCaptureCandidate(
             frame: CGRect(x: 0, y: 0, width: 1920, height: 30),
             isOnScreen: true,
+            title: "",
+            appName: "",
+            appBundleIdentifier: nil,
+            hasOwningApplication: false,
+            windowLayer: Int(CGWindowLevelForKey(.mainMenuWindow)),
+            isOwnAppWindow: false
+        ))
+    }
+
+    @Test("Includes a system menu bar with an unidentified owning application")
+    func includesSystemMenuBarWithPlaceholderOwner() {
+        #expect(ContentEnumerator.isCaptureCandidate(
+            frame: CGRect(x: 0, y: 0, width: 1728, height: 33),
+            isOnScreen: true,
             title: "Menubar",
             appName: "",
-            hasOwningApplication: false,
+            appBundleIdentifier: "",
+            hasOwningApplication: true,
             windowLayer: Int(CGWindowLevelForKey(.mainMenuWindow)),
             isOwnAppWindow: false
         ))
@@ -24,6 +39,7 @@ struct WindowCaptureCandidateTests {
             isOnScreen: true,
             title: "",
             appName: "Control Center",
+            appBundleIdentifier: "com.apple.controlcenter",
             hasOwningApplication: true,
             windowLayer: 27,
             isOwnAppWindow: false
@@ -37,6 +53,7 @@ struct WindowCaptureCandidateTests {
             isOnScreen: true,
             title: "StatusIndicator",
             appName: "",
+            appBundleIdentifier: nil,
             hasOwningApplication: false,
             windowLayer: Int(CGWindowLevelForKey(.cursorWindow)),
             isOwnAppWindow: false

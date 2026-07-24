@@ -52,6 +52,7 @@ public enum ContentEnumerator {
                     isOnScreen: window.isOnScreen,
                     title: trimmedTitle,
                     appName: appName,
+                    appBundleIdentifier: window.owningApplication?.bundleIdentifier,
                     hasOwningApplication: window.owningApplication != nil,
                     windowLayer: window.windowLayer,
                     isOwnAppWindow: window.owningApplication?.bundleIdentifier == myBundleID
@@ -65,12 +66,15 @@ public enum ContentEnumerator {
         isOnScreen: Bool,
         title: String,
         appName: String,
+        appBundleIdentifier: String?,
         hasOwningApplication: Bool,
         windowLayer: Int,
         isOwnAppWindow: Bool
     ) -> Bool {
         let hasUsableLabel = !title.isEmpty || !appName.isEmpty
-        let isSystemMenuBar = !hasOwningApplication
+        let hasIdentifiedOwningApplication = !appName.isEmpty
+            || !(appBundleIdentifier?.isEmpty ?? true)
+        let isSystemMenuBar = !hasIdentifiedOwningApplication
             && windowLayer == Int(CGWindowLevelForKey(.mainMenuWindow))
         let isElevatedApplicationWindow = hasOwningApplication
             && windowLayer > 0
@@ -81,7 +85,7 @@ public enum ContentEnumerator {
         return hasUsableSize
             && isOnScreen
             && (hasOwningApplication || isSystemMenuBar)
-            && hasUsableLabel
+            && (hasUsableLabel || isSystemMenuBar)
             && (windowLayer == 0
                 || isOwnAppWindow
                 || isElevatedApplicationWindow

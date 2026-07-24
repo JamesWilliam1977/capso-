@@ -83,6 +83,51 @@ final class CaptureWindowPolicyTests: XCTestCase {
         XCTAssertTrue(CaptureCoordinator.shouldUseFrozenWindowCapture(windowLayer: 27))
         XCTAssertFalse(CaptureCoordinator.shouldUseFrozenWindowCapture(windowLayer: 0))
     }
+
+    func testElevatedApplicationWindowIncludesNativeShadowPadding() {
+        let windowRect = CGRect(x: 100, y: 100, width: 240, height: 160)
+
+        let captureRect = CaptureCoordinator.frozenWindowCaptureRect(
+            windowRect: windowRect,
+            screenSize: CGSize(width: 1920, height: 1080),
+            windowLayer: 27,
+            appName: "Control Center",
+            appBundleIdentifier: "com.apple.controlcenter",
+            captureWindowShadow: true
+        )
+
+        XCTAssertEqual(captureRect, CGRect(x: 50, y: 50, width: 340, height: 260))
+    }
+
+    func testDisabledShadowKeepsExactFrozenWindowRect() {
+        let windowRect = CGRect(x: 100, y: 100, width: 240, height: 160)
+
+        let captureRect = CaptureCoordinator.frozenWindowCaptureRect(
+            windowRect: windowRect,
+            screenSize: CGSize(width: 1920, height: 1080),
+            windowLayer: 27,
+            appName: "Control Center",
+            appBundleIdentifier: "com.apple.controlcenter",
+            captureWindowShadow: false
+        )
+
+        XCTAssertEqual(captureRect, windowRect)
+    }
+
+    func testSystemMenuBarKeepsExactRectWhenShadowIsEnabled() {
+        let menuBarRect = CGRect(x: 0, y: 1050, width: 1920, height: 30)
+
+        let captureRect = CaptureCoordinator.frozenWindowCaptureRect(
+            windowRect: menuBarRect,
+            screenSize: CGSize(width: 1920, height: 1080),
+            windowLayer: Int(CGWindowLevelForKey(.mainMenuWindow)),
+            appName: "",
+            appBundleIdentifier: "",
+            captureWindowShadow: true
+        )
+
+        XCTAssertEqual(captureRect, menuBarRect)
+    }
 }
 
 @MainActor

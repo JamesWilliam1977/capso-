@@ -902,6 +902,32 @@ final class CaptureCoordinator {
         windowLayer != 0
     }
 
+    nonisolated static func frozenWindowCaptureRect(
+        windowRect: CGRect,
+        screenSize: CGSize,
+        windowLayer: Int,
+        appName: String,
+        appBundleIdentifier: String?,
+        captureWindowShadow: Bool
+    ) -> CGRect {
+        let hasIdentifiedApplication = !appName.isEmpty
+            || !(appBundleIdentifier?.isEmpty ?? true)
+        let includesNativeShadow = captureWindowShadow
+            && hasIdentifiedApplication
+            && windowLayer > 0
+            && windowLayer < Int(CGWindowLevelForKey(.screenSaverWindow))
+            && windowLayer != Int(CGWindowLevelForKey(.mainMenuWindow))
+        guard includesNativeShadow else { return windowRect }
+
+        let shorterSide = min(windowRect.width, windowRect.height)
+        let padding = max(30, shorterSide * 0.04) + 20
+        let screenBounds = CGRect(origin: .zero, size: screenSize)
+        let paddedRect = windowRect
+            .insetBy(dx: -padding, dy: -padding)
+            .intersection(screenBounds)
+        return paddedRect.isNull || paddedRect.isEmpty ? windowRect : paddedRect
+    }
+
     private func captureFrozenScreens() -> [(NSScreen, CGImage)] {
         NSScreen.screens.compactMap { screen in
             guard let image = Self.syncCaptureDisplay(screen.displayID) else { return nil }
@@ -1333,8 +1359,16 @@ final class CaptureCoordinator {
             fromTopLeftCaptureRect: displayLocalRect,
             screenHeight: displayBounds.height
         )
+        let captureRect = Self.frozenWindowCaptureRect(
+            windowRect: screenLocalRect,
+            screenSize: displayBounds.size,
+            windowLayer: window.windowLayer,
+            appName: window.appName,
+            appBundleIdentifier: window.appBundleIdentifier,
+            captureWindowShadow: settings.captureWindowShadow
+        )
         guard let frozenResult = frozenAreaResult(
-            rect: screenLocalRect,
+            rect: captureRect,
             screen: screen,
             frozenImage: frozenImage
         ) else {
