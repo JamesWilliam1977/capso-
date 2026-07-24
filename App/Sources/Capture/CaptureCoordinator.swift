@@ -844,6 +844,13 @@ final class CaptureCoordinator {
             return
         }
 
+        let selectableWindowsByID: [CGWindowID: WindowInfo]
+        if case let .windowSelection(windows) = mode {
+            selectableWindowsByID = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, $0) })
+        } else {
+            selectableWindowsByID = [:]
+        }
+
         showFreezeWindows(frozenScreens)
 
         // Step 2: Create transparent overlay windows (top layer) for selection
@@ -864,8 +871,19 @@ final class CaptureCoordinator {
                 }
             }
             overlay.onWindowSelected = { [weak self] windowID in
-                self?.dismissOverlay()
-                self?.performWindowCapture(windowID: windowID)
+                guard let self else { return }
+                self.dismissOverlay()
+                if let window = selectableWindowsByID[windowID],
+                   Self.shouldUseFrozenWindowCapture(windowLayer: window.windowLayer),
+                   let result = self.frozenWindowResult(
+                       window: window,
+                       screen: screen,
+                       frozenImage: frozenImage
+                   ) {
+                    self.handleCaptureResult(result)
+                } else {
+                    self.performWindowCapture(windowID: windowID)
+                }
             }
             overlay.onWindowsSelected = { [weak self] windowIDs in
                 self?.dismissOverlay()
@@ -878,6 +896,36 @@ final class CaptureCoordinator {
             overlay.activate(mode: mode)
             overlayWindows.append(overlay)
         }
+    }
+
+    nonisolated static func shouldUseFrozenWindowCapture(windowLayer: Int) -> Bool {
+        windowLayer != 0
+    }
+
+    nonisolated static func frozenWindowCaptureRect(
+        windowRect: CGRect,
+        screenSize: CGSize,
+        windowLayer: Int,
+        appName: String,
+        appBundleIdentifier: String?,
+        captureWindowShadow: Bool
+    ) -> CGRect {
+        let hasIdentifiedApplication = !appName.isEmpty
+            || !(appBundleIdentifier?.isEmpty ?? true)
+        let includesNativeShadow = captureWindowShadow
+            && hasIdentifiedApplication
+            && windowLayer > 0
+            && windowLayer < Int(CGWindowLevelForKey(.screenSaverWindow))
+            && windowLayer != Int(CGWindowLevelForKey(.mainMenuWindow))
+        guard includesNativeShadow else { return windowRect }
+
+        let shorterSide = min(windowRect.width, windowRect.height)
+        let padding = max(30, shorterSide * 0.04) + 20
+        let screenBounds = CGRect(origin: .zero, size: screenSize)
+        let paddedRect = windowRect
+            .insetBy(dx: -padding, dy: -padding)
+            .intersection(screenBounds)
+        return paddedRect.isNull || paddedRect.isEmpty ? windowRect : paddedRect
     }
 
     private func captureFrozenScreens() -> [(NSScreen, CGImage)] {
@@ -1289,6 +1337,51 @@ final class CaptureCoordinator {
             image: image,
             mode: .area,
             captureRect: captureRect,
+            displayID: screen.displayID
+        )
+    }
+
+    private func frozenWindowResult(
+        window: WindowInfo,
+        screen: NSScreen,
+        frozenImage: CGImage
+    ) -> CaptureResult? {
+        let displayBounds = CGDisplayBounds(screen.displayID)
+        let displayLocalRect = CaptureDisplayGeometry.displayLocalRect(
+            fromGlobalTopLeftRect: window.frame,
+            displayBounds: displayBounds
+        )
+        guard !displayLocalRect.isNull, !displayLocalRect.isEmpty else {
+            return nil
+        }
+
+        let screenLocalRect = CaptureDisplayGeometry.screenLocalRect(
+            fromTopLeftCaptureRect: displayLocalRect,
+            screenHeight: displayBounds.height
+        )
+        let captureRect = Self.frozenWindowCaptureRect(
+            windowRect: screenLocalRect,
+            screenSize: displayBounds.size,
+            windowLayer: window.windowLayer,
+            appName: window.appName,
+            appBundleIdentifier: window.appBundleIdentifier,
+            captureWindowShadow: settings.captureWindowShadow
+        )
+        guard let frozenResult = frozenAreaResult(
+            rect: captureRect,
+            screen: screen,
+            frozenImage: frozenImage
+        ) else {
+            return nil
+        }
+
+        return CaptureResult(
+            image: frozenResult.image,
+            mode: .window,
+            captureRect: window.frame,
+            windowName: window.title,
+            appName: window.appName.isEmpty ? nil : window.appName,
+            appBundleIdentifier: window.appBundleIdentifier,
             displayID: screen.displayID
         )
     }
