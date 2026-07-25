@@ -21,7 +21,6 @@ struct AnnotationCanvasView: NSViewRepresentable {
     var commitEditingTrigger: Int = 0
     var onDocumentChanged: (() -> Void)?
     var onSwitchToSelect: (() -> Void)?
-    var onInteractionChanged: ((Bool) -> Void)?
     /// Called when the inline text editor appears. Passes the effective
     /// fontSize (existing object's size when re-editing, current slider
     /// value for a new edit). SwiftUI flips `isEditingText` and — for
@@ -62,9 +61,6 @@ struct AnnotationCanvasView: NSViewRepresentable {
         view.zoomScale = zoomScale
         view.textRegions = textRegions
         view.onDocumentChanged = { onDocumentChanged?() }
-        view.onInteractionChanged = { isInteracting in
-            onInteractionChanged?(isInteracting)
-        }
         view.onObjectCreated = {
             if !Self.stickyTools.contains(currentTool) {
                 onSwitchToSelect?()
@@ -99,9 +95,6 @@ struct AnnotationCanvasView: NSViewRepresentable {
         nsView.zoomScale = zoomScale
         nsView.textRegions = textRegions
         nsView.onDocumentChanged = { onDocumentChanged?() }
-        nsView.onInteractionChanged = { isInteracting in
-            onInteractionChanged?(isInteracting)
-        }
         nsView.onObjectCreated = {
             if !Self.stickyTools.contains(currentTool) {
                 onSwitchToSelect?()

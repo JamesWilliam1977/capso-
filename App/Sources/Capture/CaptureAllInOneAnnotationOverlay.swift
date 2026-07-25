@@ -92,6 +92,19 @@ final class CaptureAllInOneAnnotationOverlay {
         session.renderImage(afterCommit: completion)
     }
 
+    var isEditingText: Bool {
+        session?.isEditingText ?? false
+    }
+
+    var annotationDocument: AnnotationDocument? {
+        session?.document
+    }
+
+    func performAnnotationClipboardShortcut(with event: NSEvent) -> Bool {
+        canvasWindow?.contentView?.layoutSubtreeIfNeeded()
+        return canvasWindow?.routeAnnotationClipboardShortcutToCanvas(event) ?? false
+    }
+
     private func showCanvas(session: AllInOneAnnotationSession, selectionRect: CGRect) {
         let panel = AllInOneAnnotationPanel(
             contentRect: canvasFrame(for: selectionRect),
@@ -299,20 +312,6 @@ private final class AllInOneAnnotationToolbarHostingView<Content: View>: NSHosti
     override var isOpaque: Bool {
         get { false }
         set { }
-    }
-}
-
-private extension NSView {
-    func firstSubview<T: NSView>(of type: T.Type) -> T? {
-        if let view = self as? T {
-            return view
-        }
-        for subview in subviews {
-            if let match = subview.firstSubview(of: type) {
-                return match
-            }
-        }
-        return nil
     }
 }
 

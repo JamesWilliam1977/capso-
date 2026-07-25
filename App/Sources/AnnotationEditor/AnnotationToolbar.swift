@@ -319,12 +319,19 @@ struct AnnotationToolbar: View {
 
     @ViewBuilder
     private var copyActionButton: some View {
-        let button = actionButton(icon: "doc.on.doc", help: "Copy", action: onCopy)
-            .keyboardShortcut("c", modifiers: .command)
+        let button = actionButton(icon: "doc.on.doc", help: "Copy Image and Close", action: onCopy)
+            .keyboardShortcut("c", modifiers: [.command, .shift])
         if isEditingText {
             button
         } else {
-            button.keyboardShortcut(.return, modifiers: [])
+            button.background {
+                Button(action: onCopy) { EmptyView() }
+                    .keyboardShortcut(.return, modifiers: [])
+                    .buttonStyle(.plain)
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
         }
     }
 
