@@ -52,6 +52,15 @@ public final class AnnotationDocument {
         removeObject(id: id)
     }
 
+    @discardableResult
+    public func duplicateSelected(by offset: CGSize) -> Bool {
+        guard let selectedObject else { return false }
+        let duplicate = selectedObject.copy()
+        duplicate.move(by: offset)
+        addObject(duplicate)
+        return true
+    }
+
     public func selectObject(id: ObjectID?) {
         selectedObjectID = id
     }

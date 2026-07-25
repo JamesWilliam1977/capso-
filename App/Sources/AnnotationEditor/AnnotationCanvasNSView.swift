@@ -53,9 +53,36 @@ private protocol PathEditableAnnotation: AnnotationObject {
 extension LineObject: PathEditableAnnotation {}
 extension ArrowObject: PathEditableAnnotation {}
 
+extension NSView {
+    func firstSubview<T: NSView>(of type: T.Type) -> T? {
+        if let view = self as? T {
+            return view
+        }
+        for subview in subviews {
+            if let match = subview.firstSubview(of: type) {
+                return match
+            }
+        }
+        return nil
+    }
+}
+
+extension NSWindow {
+    func routeAnnotationClipboardShortcutToCanvas(_ event: NSEvent) -> Bool {
+        guard !(firstResponder is NSTextView),
+              !(firstResponder is NSTextField),
+              !(firstResponder is NSComboBox),
+              let canvas = contentView?.firstSubview(of: AnnotationCanvasNSView.self) else {
+            return false
+        }
+        return canvas.performAnnotationClipboardShortcut(with: event)
+    }
+}
+
 @MainActor
 final class AnnotationCanvasNSView: NSView {
     var document: AnnotationDocument?
+    var annotationClipboard = AnnotationClipboard.shared
     var sourceImage: CGImage?
     var currentTool: AnnotationTool = .select
     var currentStyle: StrokeStyle = StrokeStyle() {
@@ -93,7 +120,6 @@ final class AnnotationCanvasNSView: NSView {
     var onTextEditingStarted: ((CGFloat, Bool, Bool, Bool) -> Void)?
     /// Fired on commit / cancel.
     var onTextEditingEnded: (() -> Void)?
-    var onInteractionChanged: ((Bool) -> Void)?
     /// Fired for each trackpad pinch step. Passes the per-event magnification
     /// delta and the focal location in this view's (flipped, top-left) coords.
     /// Optional: when nil, `magnify(with:)` forwards to `super` so consumers that
@@ -125,12 +151,7 @@ final class AnnotationCanvasNSView: NSView {
     /// 1:1 and line tools snap to 45°. Seeded on mouse down so a Shift press
     /// that precedes the drag is honored.
     private var squareLock = false
-    private var isDragging = false {
-        didSet {
-            guard isDragging != oldValue else { return }
-            onInteractionChanged?(isDragging)
-        }
-    }
+    private var isDragging = false
     private var dragObjectID: ObjectID?
     private var activeResizeHandle: ResizeHandle?
     private var resizeOriginalBounds: CGRect?
@@ -1209,6 +1230,9 @@ final class AnnotationCanvasNSView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        if performAnnotationClipboardShortcut(with: event) {
+            return
+        }
         if event.keyCode == 51 || event.keyCode == 117 {
             document?.removeSelected()
             needsDisplay = true
@@ -1216,6 +1240,33 @@ final class AnnotationCanvasNSView: NSView {
         } else {
             super.keyDown(with: event)
         }
+    }
+
+    func performAnnotationClipboardShortcut(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        guard modifiers == .command, textEditor == nil, let document else { return false }
+
+        let scale = zoomScale > 0 ? zoomScale : 1
+        let offset = CGSize(width: 12 / scale, height: 12 / scale)
+        let changed: Bool
+
+        switch event.keyCode {
+        case 8: // C
+            _ = annotationClipboard.copySelection(from: document)
+            return true
+        case 9: // V
+            changed = annotationClipboard.paste(into: document, offset: offset)
+        case 2: // D
+            changed = document.duplicateSelected(by: offset)
+        default:
+            return false
+        }
+
+        if changed {
+            needsDisplay = true
+            onDocumentChanged?()
+        }
+        return true
     }
 
     // MARK: - Inline text editing

@@ -8,7 +8,6 @@ import SharedKit
 final class AnnotationEditorWindow: NSPanel, NSWindowDelegate {
     /// Internal (not private) so tests can assert on document state.
     let document: AnnotationDocument
-    private let interactionState = AnnotationEditorInteractionState()
     private var alphaValueBeforeDrag: CGFloat?
     private let onCloseCallback: () -> Void
     /// Injectable so tests never present a real modal alert.
@@ -85,7 +84,6 @@ final class AnnotationEditorWindow: NSPanel, NSWindowDelegate {
         let view = AnnotationEditorView(
             sourceImage: image,
             document: document,
-            interactionState: interactionState,
             sourceAppName: sourceAppName,
             sourceWindowTitle: sourceWindowTitle,
             captureDate: captureDate,
@@ -172,7 +170,7 @@ final class AnnotationEditorWindow: NSPanel, NSWindowDelegate {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if interactionState.shouldSuppressCopyShortcut(for: event) {
+        if routeAnnotationClipboardShortcutToCanvas(event) {
             return true
         }
         return super.performKeyEquivalent(with: event)
@@ -180,7 +178,7 @@ final class AnnotationEditorWindow: NSPanel, NSWindowDelegate {
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown,
-           interactionState.shouldSuppressCopyShortcut(for: event) {
+           routeAnnotationClipboardShortcutToCanvas(event) {
             return
         }
         super.sendEvent(event)

@@ -7,7 +7,6 @@ import OCRKit
 @MainActor
 final class InlineAnnotationEditorWindow: NSPanel, NSWindowDelegate {
     let document: AnnotationDocument
-    private let interactionState = AnnotationEditorInteractionState()
     private let onCloseCallback: () -> Void
     /// Injectable so tests never present a real modal alert.
     var confirmDiscard: () -> Bool = { false }
@@ -60,7 +59,6 @@ final class InlineAnnotationEditorWindow: NSPanel, NSWindowDelegate {
         let view = InlineAnnotationEditorView(
             sourceImage: image,
             document: document,
-            interactionState: interactionState,
             screenSize: screen.frame.size,
             screenLocalRect: screenLocalRect,
             onSave: { [weak self] rendered in
@@ -115,7 +113,7 @@ final class InlineAnnotationEditorWindow: NSPanel, NSWindowDelegate {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if interactionState.shouldSuppressCopyShortcut(for: event) {
+        if routeAnnotationClipboardShortcutToCanvas(event) {
             return true
         }
         return super.performKeyEquivalent(with: event)
@@ -123,7 +121,7 @@ final class InlineAnnotationEditorWindow: NSPanel, NSWindowDelegate {
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown,
-           interactionState.shouldSuppressCopyShortcut(for: event) {
+           routeAnnotationClipboardShortcutToCanvas(event) {
             return
         }
         super.sendEvent(event)
@@ -133,7 +131,6 @@ final class InlineAnnotationEditorWindow: NSPanel, NSWindowDelegate {
 private struct InlineAnnotationEditorView: View {
     let sourceImage: CGImage
     let document: AnnotationDocument
-    let interactionState: AnnotationEditorInteractionState
     let screenSize: CGSize
     let screenLocalRect: CGRect
     let onSave: (CGImage) -> Void
@@ -298,7 +295,6 @@ private struct InlineAnnotationEditorView: View {
             textRegions: textRegions,
             commitEditingTrigger: commitEditingTrigger,
             onSwitchToSelect: switchToSelectTool,
-            onInteractionChanged: handleCanvasInteractionChanged,
             onTextEditingStarted: handleTextEditingStarted,
             onTextEditingEnded: handleTextEditingEnded,
             onMagnify: handleMagnify,
@@ -391,10 +387,6 @@ private struct InlineAnnotationEditorView: View {
     private func handleStrokePatternChange(oldValue: StrokePattern, newValue: StrokePattern) {
         savedStrokePattern = newValue
         updateSelectedStyle()
-    }
-
-    private func handleCanvasInteractionChanged(_ isInteracting: Bool) {
-        interactionState.setCanvasInteraction(isInteracting)
     }
 
     /// Trackpad pinch. `locInView` is in the canvas's flipped, top-left coords.
@@ -528,7 +520,6 @@ private struct InlineAnnotationEditorView: View {
         hasStroke: Bool
     ) {
         isEditingText = true
-        interactionState.isEditingText = true
         textFillEnabled = hasFill
         textOutlineEnabled = hasOutline
         textStrokeEnabled = hasStroke
@@ -539,7 +530,6 @@ private struct InlineAnnotationEditorView: View {
 
     private func handleTextEditingEnded() {
         isEditingText = false
-        interactionState.isEditingText = false
         savedTextFontSize = Double(lineWidth)
     }
 
@@ -612,9 +602,6 @@ private struct InlineAnnotationEditorView: View {
     }
 
     private func copy() {
-        guard !interactionState.shouldSuppressCopyAction else {
-            return
-        }
         commitEditingTrigger += 1
         DispatchQueue.main.async {
             if let rendered = renderedOutputImage() {
@@ -804,12 +791,19 @@ private struct InlineAnnotationToolbar: View {
 
     @ViewBuilder
     private var copyActionButton: some View {
-        let button = iconButton(systemName: "doc.on.doc", help: "Copy", action: onCopy)
-            .keyboardShortcut("c", modifiers: .command)
+        let button = iconButton(systemName: "doc.on.doc", help: "Copy Image and Close", action: onCopy)
+            .keyboardShortcut("c", modifiers: [.command, .shift])
         if isEditingText {
             button
         } else {
-            button.keyboardShortcut(.return, modifiers: [])
+            button.background {
+                Button(action: onCopy) { EmptyView() }
+                    .keyboardShortcut(.return, modifiers: [])
+                    .buttonStyle(.plain)
+                    .frame(width: 0, height: 0)
+                    .opacity(0)
+                    .accessibilityHidden(true)
+            }
         }
     }
 

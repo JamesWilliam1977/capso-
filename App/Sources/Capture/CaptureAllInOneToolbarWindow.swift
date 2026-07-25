@@ -502,10 +502,27 @@ final class CaptureAllInOneToolbarWindow {
         }
 
         let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+
+        if modifiers.isEmpty, event.keyCode == 36 || event.keyCode == 76 {
+            guard let annotationOverlay, !annotationOverlay.isEditingText else { return event }
+            performCopyAction()
+            return nil
+        }
+
+        if modifiers == [.command, .shift], event.keyCode == 8 {
+            performCopyAction()
+            return nil
+        }
+
         guard modifiers == .command else { return event }
+
+        if annotationOverlay?.performAnnotationClipboardShortcut(with: event) == true {
+            return nil
+        }
 
         switch event.charactersIgnoringModifiers?.lowercased() {
         case "c":
+            guard annotationOverlay == nil else { return event }
             performCopyAction()
             return nil
         case "s":
@@ -689,7 +706,7 @@ private struct CaptureAllInOneToolbarView: View {
             HStack(spacing: 8) {
                 dimensionPill
                 presetMenu
-                iconButton("doc.on.doc", kind: .copy, help: "Copy selected area", action: onCopy)
+                iconButton("doc.on.doc", kind: .copy, help: "Copy Image and Close", action: onCopy)
                 iconButton("square.and.arrow.down", kind: .save, help: "Save selected area", action: onSave)
                 iconButton("pin", kind: .pin, help: "Pin selected area", action: onPin)
                 iconButton("xmark", kind: .cancel, help: "Cancel", action: onCancel)
@@ -730,7 +747,7 @@ private struct CaptureAllInOneToolbarView: View {
                 railPresetMenu
             }
 
-            railIconButton("doc.on.doc", kind: .copy, help: "Copy selected area", label: String(localized: "Copy"), action: onCopy)
+            railIconButton("doc.on.doc", kind: .copy, help: "Copy Image and Close", label: String(localized: "Copy"), action: onCopy)
             railIconButton("square.and.arrow.down", kind: .save, help: "Save selected area", label: String(localized: "Save"), action: onSave)
             railIconButton("pin", kind: .pin, help: "Pin selected area", label: String(localized: "Pin"), action: onPin)
             railIconButton("xmark", kind: .cancel, help: "Cancel", label: String(localized: "Close"), action: onCancel)
