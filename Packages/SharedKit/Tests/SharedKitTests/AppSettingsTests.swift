@@ -37,6 +37,21 @@ struct AppSettingsTests {
         #expect(ScreenshotOutputPreset.compactJPEG.jpegQuality == 0.70)
     }
 
+    @Test("Screenshot clipboard format defaults to PNG and persists")
+    func screenshotClipboardFormatDefaultsAndPersists() {
+        let suite = "test.screenshotClipboardFormat"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        let first = AppSettings(defaults: defaults)
+        #expect(first.screenshotClipboardFormat == .png)
+
+        first.screenshotClipboardFormat = .jpeg
+
+        let second = AppSettings(defaults: defaults)
+        #expect(second.screenshotClipboardFormat == .jpeg)
+    }
+
     @Test("Screenshot output preset falls back to legacy JPEG format")
     func screenshotOutputPresetLegacyFormatFallback() {
         let suite = "test.screenshotOutputPreset.legacy"
