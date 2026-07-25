@@ -57,14 +57,6 @@ public enum ImageUtilities {
         return pasteboard.writeObjects([item])
     }
 
-    @discardableResult
-    public static func copyPNGToPasteboard(
-        _ cgImage: CGImage,
-        pasteboard: NSPasteboard = .general
-    ) -> Bool {
-        copyToPasteboard(cgImage, format: .png, pasteboard: pasteboard)
-    }
-
     public static func jpegData(from cgImage: CGImage, quality: Double = 0.85) -> Data? {
         let rep = NSBitmapImageRep(cgImage: cgImage)
         return rep.representation(using: .jpeg, properties: [.compressionFactor: quality])

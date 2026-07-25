@@ -455,7 +455,7 @@ public final class AppSettings: @unchecked Sendable {
     public var screenshotClipboardFormat: ScreenshotClipboardFormat {
         get {
             guard let raw = defaults.string(forKey: "screenshotClipboardFormat"),
-                  let value = ScreenshotClipboardFormat(rawValue: raw) else { return .tiff }
+                  let value = ScreenshotClipboardFormat(rawValue: raw) else { return .png }
             return value
         }
         set { defaults.set(newValue.rawValue, forKey: "screenshotClipboardFormat") }
