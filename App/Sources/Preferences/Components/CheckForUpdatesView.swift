@@ -1,6 +1,7 @@
 // App/Sources/Preferences/Components/CheckForUpdatesView.swift
 import AppKit
 import SwiftUI
+import SharedKit
 import Sparkle
 
 @MainActor
@@ -17,7 +18,22 @@ final class UpdateManager: NSObject, ObservableObject {
     }
 
     @Published private(set) var canCheckForUpdates = false
+    /// Whether the automatic-install option can be offered at all. Sparkle turns
+    /// this off while background checks are disabled.
+    @Published private(set) var canConfigureAutomaticInstall = true
     @Published private(set) var status: Status?
+    @Published var automaticallyChecksForUpdates: Bool = true {
+        didSet {
+            guard oldValue != automaticallyChecksForUpdates else { return }
+            updater.automaticallyChecksForUpdates = automaticallyChecksForUpdates
+        }
+    }
+    @Published var updateCheckFrequency: UpdateCheckFrequency = .daily {
+        didSet {
+            guard oldValue != updateCheckFrequency else { return }
+            updater.updateCheckInterval = updateCheckFrequency.timeInterval
+        }
+    }
     @Published var automaticallyDownloadsUpdates: Bool = false {
         didSet {
             guard oldValue != automaticallyDownloadsUpdates else { return }
@@ -33,6 +49,8 @@ final class UpdateManager: NSObject, ObservableObject {
     private var manualCheckState: ManualCheckState = .none
     private var probeFoundValidUpdate = false
     private var canCheckObservation: NSKeyValueObservation?
+    private var allowsAutomaticObservation: NSKeyValueObservation?
+    private var autoCheckObservation: NSKeyValueObservation?
     private var autoDownloadObservation: NSKeyValueObservation?
     private var clearStatusTask: Task<Void, Never>?
 
@@ -42,17 +60,46 @@ final class UpdateManager: NSObject, ObservableObject {
         userDriverDelegate: nil
     )
 
-    var updater: SPUUpdater { updaterController.updater }
+    private let injectedUpdater: (any SoftwareUpdating)?
 
-    override init() {
+    var updater: any SoftwareUpdating { injectedUpdater ?? updaterController.updater }
+
+    /// - Parameter updater: Overrides Sparkle's updater. Tests pass a stand-in;
+    ///   the app passes nothing so the real `SPUStandardUpdaterController` is used.
+    init(updater: (any SoftwareUpdating)? = nil) {
+        injectedUpdater = updater
         super.init()
-        automaticallyDownloadsUpdates = updater.automaticallyDownloadsUpdates
-        canCheckObservation = updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
+        // Property observers don't run inside an initializer, so seeding these
+        // never writes back to the updater.
+        canCheckForUpdates = self.updater.canCheckForUpdates
+        canConfigureAutomaticInstall = self.updater.allowsAutomaticUpdates
+        automaticallyChecksForUpdates = self.updater.automaticallyChecksForUpdates
+        updateCheckFrequency = UpdateCheckFrequency(closestTo: self.updater.updateCheckInterval)
+        automaticallyDownloadsUpdates = self.updater.automaticallyDownloadsUpdates
+        startObservingSparkleUpdater()
+    }
+
+    /// Sparkle's properties are KVO-compliant; a stand-in updater is not, and
+    /// keeps whatever state the test sets on it.
+    private func startObservingSparkleUpdater() {
+        guard let sparkleUpdater = updater as? SPUUpdater else { return }
+
+        canCheckObservation = sparkleUpdater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] updater, _ in
             Task { @MainActor in
                 self?.canCheckForUpdates = updater.canCheckForUpdates
             }
         }
-        autoDownloadObservation = updater.observe(\.automaticallyDownloadsUpdates, options: [.new]) { [weak self] updater, _ in
+        allowsAutomaticObservation = sparkleUpdater.observe(\.allowsAutomaticUpdates, options: [.initial, .new]) { [weak self] updater, _ in
+            Task { @MainActor in
+                self?.canConfigureAutomaticInstall = updater.allowsAutomaticUpdates
+            }
+        }
+        autoCheckObservation = sparkleUpdater.observe(\.automaticallyChecksForUpdates, options: [.new]) { [weak self] updater, _ in
+            Task { @MainActor in
+                self?.automaticallyChecksForUpdates = updater.automaticallyChecksForUpdates
+            }
+        }
+        autoDownloadObservation = sparkleUpdater.observe(\.automaticallyDownloadsUpdates, options: [.new]) { [weak self] updater, _ in
             Task { @MainActor in
                 self?.automaticallyDownloadsUpdates = updater.automaticallyDownloadsUpdates
             }

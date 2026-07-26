@@ -43,6 +43,10 @@ struct GeneralSettingsView: View {
                 }
             }
 
+            if let updateManager {
+                UpdatesSettingsSection(updateManager: updateManager)
+            }
+
             SettingGroup(title: "Automation") {
                 SettingCard {
                     SettingRow(
@@ -72,24 +76,6 @@ struct GeneralSettingsView: View {
                         Toggle("", isOn: $viewModel.playShutterSound)
                             .toggleStyle(.switch)
                             .controlSize(.small)
-                    }
-                }
-            }
-
-            if let updateManager {
-                SettingGroup(title: "Updates") {
-                    SettingCard {
-                        SettingRow(label: "Automatically Install Updates", sublabel: "Install updates in the background when available") {
-                            Toggle("", isOn: Binding(
-                                get: { updateManager.automaticallyDownloadsUpdates },
-                                set: { updateManager.automaticallyDownloadsUpdates = $0 }
-                            ))
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                        }
-                        SettingRow(label: "Check for Updates", sublabel: "Automatically checks daily", showDivider: true) {
-                            CheckForUpdatesView(updateManager: updateManager)
-                        }
                     }
                 }
             }
