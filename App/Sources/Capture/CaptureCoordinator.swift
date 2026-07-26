@@ -1511,12 +1511,13 @@ final class CaptureCoordinator {
             return  // history already saved above; skip the call below
         case .default:
             let shouldAutoUpload = settings.cloudShareAutoUploadEnabled && shareCoordinator != nil
-            applyDefaultPostCaptureActions(outputResult, entryID: entryID)
+            let savedFileURL = applyDefaultPostCaptureActions(outputResult, entryID: entryID)
             if settings.screenshotShowPreview {
                 showQuickAccess(
                     for: outputResult,
                     entryID: entryID,
-                    autoUpload: shouldAutoUpload
+                    autoUpload: shouldAutoUpload,
+                    preferredFileURL: savedFileURL
                 )
             } else if shouldAutoUpload, let coord = shareCoordinator {
                 Task {
@@ -1548,7 +1549,14 @@ final class CaptureCoordinator {
         return NSSound(named: "Pop")
     }()
 
-    private func showQuickAccess(for result: CaptureResult, entryID: UUID, autoUpload: Bool) {
+    @discardableResult
+    func showQuickAccess(
+        for result: CaptureResult,
+        entryID: UUID,
+        autoUpload: Bool,
+        preferredFileURL: URL? = nil,
+        pasteboard: NSPasteboard = .general
+    ) -> QuickAccessWindow {
         // If the stack is full, evict the oldest (the one anchored at the
         // bottom slot) with a slide-off-left animation. The remaining
         // previews will slide down one slot as part of the restack below.
@@ -1575,7 +1583,12 @@ final class CaptureCoordinator {
         // stack slot gets dismissed — not whichever one happens to be newest.
         window.onCopy = { [weak self, weak window] in
             guard let self, let window else { return }
-            self.copyScreenshotToClipboard(result, entryID: entryID)
+            self.copyScreenshotToClipboard(
+                result,
+                entryID: entryID,
+                preferredFileURL: preferredFileURL,
+                pasteboard: pasteboard
+            )
             self.dismissQuickAccessWindow(window)
         }
         window.onSave = { [weak self, weak window] in
@@ -1619,6 +1632,7 @@ final class CaptureCoordinator {
         quickAccessWindows.append(window)
         restackQuickAccessWindows(excluding: window)
         window.show()
+        return window
     }
 
     private func openQuickAccessPreview(_ result: CaptureResult, anchorScreen: NSScreen?) {
@@ -1861,7 +1875,7 @@ final class CaptureCoordinator {
             image: image,
             anchorRect: anchor,
             onCopy: { [weak self] in
-                self?.copyImageToClipboard(image)
+                self?.copyRenderedScreenshotToClipboard(image)
             },
             onSave: { [weak self] in
                 self?.saveImageToFile(
@@ -1879,7 +1893,7 @@ final class CaptureCoordinator {
         controller.show()
     }
 
-    private func copyImageToClipboard(_ image: CGImage) {
+    private func copyRenderedScreenshotToClipboard(_ image: CGImage) {
         let temporaryFileStore = QuickAccessDragFileStore()
         ScreenshotClipboard.copy(
             image,
@@ -1925,11 +1939,12 @@ final class CaptureCoordinator {
         }
     }
 
+    @discardableResult
     func applyDefaultPostCaptureActions(
         _ result: CaptureResult,
         entryID: UUID,
         pasteboard: NSPasteboard = .general
-    ) {
+    ) -> URL? {
         if settings.screenshotAutoCopy,
            settings.screenshotClipboardContent == .image {
             copyScreenshotToClipboard(
@@ -1950,6 +1965,7 @@ final class CaptureCoordinator {
                 pasteboard: pasteboard
             )
         }
+        return savedFileURL
     }
 
     @discardableResult
@@ -2020,7 +2036,7 @@ final class CaptureCoordinator {
     }
 
     private func copyRenderedImage(_ image: CGImage) {
-        copyImageToClipboard(image)
+        copyRenderedScreenshotToClipboard(image)
     }
 
     private func showToast(

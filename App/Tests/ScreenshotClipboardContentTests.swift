@@ -106,6 +106,43 @@ final class ScreenshotClipboardContentTests: XCTestCase {
         XCTAssertTrue(FileManager.default.isReadableFile(atPath: copiedPath))
     }
 
+    func testQuickAccessCopyReusesAutoSaveOutputPath() throws {
+        let settings = makeSettings()
+        let exportDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScreenshotClipboardQuickAccessTests", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: exportDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: exportDirectory) }
+        settings.setExportLocation(exportDirectory)
+        settings.screenshotAutoCopy = false
+        settings.screenshotAutoSave = true
+        settings.screenshotClipboardContent = .filePath
+        let coordinator = CaptureCoordinator(settings: settings)
+        let pasteboard = makePasteboard()
+        let result = try makeCaptureResult()
+        let entryID = UUID()
+
+        let savedFileURL = try XCTUnwrap(coordinator.applyDefaultPostCaptureActions(
+            result,
+            entryID: entryID,
+            pasteboard: pasteboard
+        ))
+        let window = coordinator.showQuickAccess(
+            for: result,
+            entryID: entryID,
+            autoUpload: false,
+            preferredFileURL: savedFileURL,
+            pasteboard: pasteboard
+        )
+        window.onCopy?()
+
+        XCTAssertEqual(
+            URL(fileURLWithPath: try XCTUnwrap(pasteboard.string(forType: .string)))
+                .resolvingSymlinksInPath(),
+            savedFileURL.resolvingSymlinksInPath()
+        )
+    }
+
     func testHistoryScreenshotCopyUsesExistingReadableFilePath() throws {
         let settings = makeSettings()
         settings.screenshotClipboardContent = .filePath
