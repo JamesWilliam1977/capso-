@@ -29,18 +29,33 @@ struct ScreenshotSettingsView: View {
                             .controlSize(.small)
                     }
                     SettingRow(
-                        label: "Clipboard Format",
-                        sublabel: "Used whenever a screenshot is copied",
+                        label: "Clipboard Content",
+                        sublabel: clipboardContentDescription,
                         showDivider: true
                     ) {
-                        Picker("", selection: $viewModel.screenshotClipboardFormat) {
-                            Text("PNG").tag(ScreenshotClipboardFormat.png)
-                            Text("JPEG").tag(ScreenshotClipboardFormat.jpeg)
-                            Text("TIFF").tag(ScreenshotClipboardFormat.tiff)
+                        Picker("", selection: $viewModel.screenshotClipboardContent) {
+                            Text("Image").tag(ScreenshotClipboardContent.image)
+                            Text("File Path").tag(ScreenshotClipboardContent.filePath)
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
                         .fixedSize(horizontal: true, vertical: false)
+                    }
+                    if viewModel.screenshotClipboardContent == .image {
+                        SettingRow(
+                            label: "Clipboard Format",
+                            sublabel: "Used whenever a screenshot is copied",
+                            showDivider: true
+                        ) {
+                            Picker("", selection: $viewModel.screenshotClipboardFormat) {
+                                Text("PNG").tag(ScreenshotClipboardFormat.png)
+                                Text("JPEG").tag(ScreenshotClipboardFormat.jpeg)
+                                Text("TIFF").tag(ScreenshotClipboardFormat.tiff)
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .fixedSize(horizontal: true, vertical: false)
+                        }
                     }
                     SettingRow(label: "Auto Save", sublabel: "Save to file automatically", showDivider: true) {
                         Toggle("", isOn: $viewModel.screenshotAutoSave)
@@ -258,6 +273,15 @@ struct ScreenshotSettingsView: View {
         }
         .sheet(isPresented: $showingAddPreset) {
             addPresetSheet
+        }
+    }
+
+    private var clipboardContentDescription: LocalizedStringKey {
+        switch viewModel.screenshotClipboardContent {
+        case .image:
+            "Copy image data to the clipboard"
+        case .filePath:
+            "Copy the saved path, or keep a temporary file for 24 hours"
         }
     }
 
