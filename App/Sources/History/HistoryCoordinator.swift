@@ -500,7 +500,7 @@ final class HistoryCoordinator {
                 return true
             },
             onCopy: { [weak self] rendered in
-                self?.copyImageToClipboard(rendered)
+                self?.copyScreenshotToClipboard(rendered)
                 self?.annotationWindow = nil
             },
             onPin: { [weak self] rendered, frame in
@@ -600,11 +600,30 @@ final class HistoryCoordinator {
         dragFileURLs.removeAll()
     }
 
-    private func copyImageToClipboard(_ image: CGImage) {
-        ImageUtilities.copyToPasteboard(
+    @discardableResult
+    func copyScreenshotToClipboard(
+        _ image: CGImage,
+        preferredFileURL: URL? = nil,
+        pasteboard: NSPasteboard = .general
+    ) -> Bool {
+        let temporaryFileStore = QuickAccessDragFileStore()
+        return ScreenshotClipboard.copy(
             image,
-            format: settings.screenshotClipboardFormat
-        )
+            content: settings.screenshotClipboardContent,
+            imageFormat: settings.screenshotClipboardFormat,
+            pasteboard: pasteboard
+        ) {
+            if let preferredFileURL,
+               FileManager.default.isReadableFile(atPath: preferredFileURL.path) {
+                return preferredFileURL
+            }
+            return try temporaryFileStore.fileURL(
+                for: image,
+                id: UUID(),
+                preset: self.settings.screenshotOutputPreset,
+                template: self.settings.screenshotFilenameTemplate
+            )
+        }
     }
 
     private func pinImage(
@@ -618,7 +637,7 @@ final class HistoryCoordinator {
             image: image,
             anchorRect: anchor,
             onCopy: { [weak self] in
-                self?.copyImageToClipboard(image)
+                self?.copyScreenshotToClipboard(image)
             },
             onSave: { [weak self] in
                 self?.saveImageToExportLocation(
@@ -680,7 +699,7 @@ final class HistoryCoordinator {
 
         case .area, .fullscreen, .window:
             guard let image = Self.loadCGImage(from: sourceURL) else { return }
-            copyImageToClipboard(image)
+            copyScreenshotToClipboard(image, preferredFileURL: sourceURL)
         }
     }
 
