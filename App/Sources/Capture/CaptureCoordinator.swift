@@ -1483,7 +1483,7 @@ final class CaptureCoordinator {
 
         switch action {
         case .clipboard:
-            copyImageToClipboard(outputResult.image)
+            copyScreenshotToClipboard(outputResult, entryID: entryID)
         case .annotate:
             // Open the editor on the same screen the capture came from.
             openAnnotationEditor(outputResult, anchorScreen: screenFor(result: result))
@@ -1511,17 +1511,13 @@ final class CaptureCoordinator {
             return  // history already saved above; skip the call below
         case .default:
             let shouldAutoUpload = settings.cloudShareAutoUploadEnabled && shareCoordinator != nil
-            if settings.screenshotAutoCopy {
-                copyImageToClipboard(outputResult.image)
-            }
-            if settings.screenshotAutoSave {
-                saveImageToFile(outputResult)
-            }
+            let savedFileURL = applyDefaultPostCaptureActions(outputResult, entryID: entryID)
             if settings.screenshotShowPreview {
                 showQuickAccess(
                     for: outputResult,
                     entryID: entryID,
-                    autoUpload: shouldAutoUpload
+                    autoUpload: shouldAutoUpload,
+                    preferredFileURL: savedFileURL
                 )
             } else if shouldAutoUpload, let coord = shareCoordinator {
                 Task {
@@ -1553,7 +1549,14 @@ final class CaptureCoordinator {
         return NSSound(named: "Pop")
     }()
 
-    private func showQuickAccess(for result: CaptureResult, entryID: UUID, autoUpload: Bool) {
+    @discardableResult
+    func showQuickAccess(
+        for result: CaptureResult,
+        entryID: UUID,
+        autoUpload: Bool,
+        preferredFileURL: URL? = nil,
+        pasteboard: NSPasteboard = .general
+    ) -> QuickAccessWindow {
         // If the stack is full, evict the oldest (the one anchored at the
         // bottom slot) with a slide-off-left animation. The remaining
         // previews will slide down one slot as part of the restack below.
@@ -1580,12 +1583,27 @@ final class CaptureCoordinator {
         // stack slot gets dismissed — not whichever one happens to be newest.
         window.onCopy = { [weak self, weak window] in
             guard let self, let window else { return }
-            self.copyImageToClipboard(result.image)
+            self.copyScreenshotToClipboard(
+                result,
+                entryID: entryID,
+                preferredFileURL: preferredFileURL,
+                pasteboard: pasteboard
+            )
             self.dismissQuickAccessWindow(window)
         }
         window.onSave = { [weak self, weak window] in
             guard let self, let window else { return }
-            self.saveImageToFile(result)
+            let savedFileURL = self.saveImageToFile(result)
+            if self.settings.screenshotAutoCopy,
+               self.settings.screenshotClipboardContent == .filePath,
+               let savedFileURL {
+                self.copyScreenshotToClipboard(
+                    result,
+                    entryID: entryID,
+                    preferredFileURL: savedFileURL,
+                    pasteboard: pasteboard
+                )
+            }
             self.dismissQuickAccessWindow(window)
         }
         window.onAnnotate = { [weak self, weak window] in
@@ -1624,6 +1642,7 @@ final class CaptureCoordinator {
         quickAccessWindows.append(window)
         restackQuickAccessWindows(excluding: window)
         window.show()
+        return window
     }
 
     private func openQuickAccessPreview(_ result: CaptureResult, anchorScreen: NSScreen?) {
@@ -1866,7 +1885,7 @@ final class CaptureCoordinator {
             image: image,
             anchorRect: anchor,
             onCopy: { [weak self] in
-                self?.copyImageToClipboard(image)
+                self?.copyRenderedScreenshotToClipboard(image)
             },
             onSave: { [weak self] in
                 self?.saveImageToFile(
@@ -1884,14 +1903,83 @@ final class CaptureCoordinator {
         controller.show()
     }
 
-    private func copyImageToClipboard(_ image: CGImage) {
-        ImageUtilities.copyToPasteboard(
+    private func copyRenderedScreenshotToClipboard(_ image: CGImage) {
+        let temporaryFileStore = QuickAccessDragFileStore()
+        ScreenshotClipboard.copy(
             image,
-            format: settings.screenshotClipboardFormat
-        )
+            content: settings.screenshotClipboardContent,
+            imageFormat: settings.screenshotClipboardFormat
+        ) {
+            try temporaryFileStore.fileURL(
+                for: image,
+                id: UUID(),
+                preset: self.settings.screenshotOutputPreset,
+                template: self.settings.screenshotFilenameTemplate
+            )
+        }
     }
 
-    private func saveImageToFile(_ result: CaptureResult) {
+    @discardableResult
+    func copyScreenshotToClipboard(
+        _ result: CaptureResult,
+        entryID: UUID,
+        preferredFileURL: URL? = nil,
+        pasteboard: NSPasteboard = .general
+    ) -> Bool {
+        let temporaryFileStore = QuickAccessDragFileStore()
+        return ScreenshotClipboard.copy(
+            result.image,
+            content: settings.screenshotClipboardContent,
+            imageFormat: settings.screenshotClipboardFormat,
+            pasteboard: pasteboard
+        ) {
+            if let preferredFileURL,
+               FileManager.default.isReadableFile(atPath: preferredFileURL.path) {
+                return preferredFileURL
+            }
+            return try temporaryFileStore.fileURL(
+                for: result.image,
+                id: entryID,
+                preset: self.settings.screenshotOutputPreset,
+                date: result.timestamp,
+                sourceAppName: result.appName,
+                sourceWindowTitle: result.windowName,
+                template: self.settings.screenshotFilenameTemplate
+            )
+        }
+    }
+
+    @discardableResult
+    func applyDefaultPostCaptureActions(
+        _ result: CaptureResult,
+        entryID: UUID,
+        pasteboard: NSPasteboard = .general
+    ) -> URL? {
+        if settings.screenshotAutoCopy,
+           settings.screenshotClipboardContent == .image {
+            copyScreenshotToClipboard(
+                result,
+                entryID: entryID,
+                pasteboard: pasteboard
+            )
+        }
+        let savedFileURL = settings.screenshotAutoSave
+            ? saveImageToFile(result)
+            : nil
+        if settings.screenshotAutoCopy,
+           settings.screenshotClipboardContent == .filePath {
+            copyScreenshotToClipboard(
+                result,
+                entryID: entryID,
+                preferredFileURL: savedFileURL,
+                pasteboard: pasteboard
+            )
+        }
+        return savedFileURL
+    }
+
+    @discardableResult
+    private func saveImageToFile(_ result: CaptureResult) -> URL? {
         saveImageToFile(
             result.image,
             sourceAppName: result.appName,
@@ -1900,13 +1988,14 @@ final class CaptureCoordinator {
         )
     }
 
+    @discardableResult
     private func saveImageToFile(
         _ image: CGImage,
         sourceAppName: String? = nil,
         sourceWindowTitle: String? = nil,
         date: Date = Date()
-    ) {
-        guard let encoded = screenshotData(from: image) else { return }
+    ) -> URL? {
+        guard let encoded = screenshotData(from: image) else { return nil }
         let directory = settings.screenshotMonthlyFolders
             ? FileNaming.monthlyDirectory(in: settings.exportLocation)
             : settings.exportLocation
@@ -1919,8 +2008,13 @@ final class CaptureCoordinator {
             sourceWindowTitle: sourceWindowTitle,
             template: settings.screenshotFilenameTemplate
         )
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try? encoded.data.write(to: url)
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try encoded.data.write(to: url)
+            return url
+        } catch {
+            return nil
+        }
     }
 
     private func screenshotData(from image: CGImage) -> (data: Data, format: FileFormat)? {
@@ -1952,7 +2046,7 @@ final class CaptureCoordinator {
     }
 
     private func copyRenderedImage(_ image: CGImage) {
-        copyImageToClipboard(image)
+        copyRenderedScreenshotToClipboard(image)
     }
 
     private func showToast(

@@ -1938,6 +1938,62 @@
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "剪贴板" } }
       }
     },
+    "Clipboard Content" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クリップボードの内容" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "클립보드 내용" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "剪贴板内容" } }
+      }
+    },
+    "Clipboard Format" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クリップボード形式" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "클립보드 형식" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "剪贴板格式" } }
+      }
+    },
+    "Copy image data to the clipboard" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "画像データをクリップボードにコピー" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이미지 데이터를 클립보드에 복사" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "将图像数据复制到剪贴板" } }
+      }
+    },
+    "Copy the saved path, or keep a temporary file for 24 hours" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存先のパスをコピーします。自動保存しない場合、一時ファイルを24時間保持します" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "저장된 경로를 복사합니다. 자동 저장하지 않으면 임시 파일을 24시간 보관합니다" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制已保存文件的路径；未自动保存时，临时文件保留 24 小时" } }
+      }
+    },
+    "File Path" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ファイルパス" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "파일 경로" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "文件路径" } }
+      }
+    },
+    "Image" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "画像" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이미지" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "图像" } }
+      }
+    },
+    "TIFF" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "TIFF" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "TIFF" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "TIFF" } }
+      }
+    },
+    "Used whenever a screenshot is copied" : {
+      "localizations" : {
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "スクリーンショットをコピーするときに使用" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "스크린샷을 복사할 때 사용" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "每次复制截图时使用" } }
+      }
+    },
     "Copy" : {
       "extractionState" : "stale",
       "localizations" : {
