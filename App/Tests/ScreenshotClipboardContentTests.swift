@@ -143,6 +143,55 @@ final class ScreenshotClipboardContentTests: XCTestCase {
         )
     }
 
+    func testQuickAccessSaveReplacesManagedTemporaryPathWithSavedPath() throws {
+        let settings = makeSettings()
+        let exportDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScreenshotClipboardQuickAccessSaveTests", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: exportDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: exportDirectory) }
+        settings.setExportLocation(exportDirectory)
+        settings.screenshotAutoCopy = true
+        settings.screenshotAutoSave = false
+        settings.screenshotClipboardContent = .filePath
+        let coordinator = CaptureCoordinator(settings: settings)
+        let pasteboard = makePasteboard()
+        let result = try makeCaptureResult()
+        let entryID = UUID()
+
+        coordinator.applyDefaultPostCaptureActions(
+            result,
+            entryID: entryID,
+            pasteboard: pasteboard
+        )
+        let temporaryPath = try XCTUnwrap(pasteboard.string(forType: .string))
+        defer { try? FileManager.default.removeItem(atPath: temporaryPath) }
+
+        let window = coordinator.showQuickAccess(
+            for: result,
+            entryID: entryID,
+            autoUpload: false,
+            pasteboard: pasteboard
+        )
+        window.onSave?()
+
+        let savedPath = try XCTUnwrap(pasteboard.string(forType: .string))
+        let savedFiles = try FileManager.default.contentsOfDirectory(
+            at: exportDirectory,
+            includingPropertiesForKeys: nil
+        )
+        XCTAssertNotEqual(
+            URL(fileURLWithPath: savedPath).resolvingSymlinksInPath(),
+            URL(fileURLWithPath: temporaryPath).resolvingSymlinksInPath()
+        )
+        XCTAssertEqual(savedFiles.count, 1)
+        XCTAssertEqual(
+            URL(fileURLWithPath: savedPath).resolvingSymlinksInPath(),
+            savedFiles[0].resolvingSymlinksInPath()
+        )
+        XCTAssertTrue(FileManager.default.isReadableFile(atPath: savedPath))
+    }
+
     func testHistoryScreenshotCopyUsesExistingReadableFilePath() throws {
         let settings = makeSettings()
         settings.screenshotClipboardContent = .filePath
