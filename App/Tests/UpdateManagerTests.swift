@@ -30,6 +30,25 @@ final class FakeSoftwareUpdater: SoftwareUpdating {
     }
 }
 
+/// The values Sparkle starts from before the user picks anything, which live in
+/// the app's Info.plist rather than in code.
+final class ShippedUpdateDefaultsTests: XCTestCase {
+    func testAutomaticChecksAreOnByDefault() {
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUEnableAutomaticChecks") as? Bool, true)
+    }
+
+    func testAutomaticInstallIsOffByDefault() {
+        XCTAssertNil(Bundle.main.object(forInfoDictionaryKey: AutomaticInstallPreference.key))
+    }
+
+    func testDefaultCheckFrequencyIsWeekly() {
+        let interval = Bundle.main.object(forInfoDictionaryKey: "SUScheduledCheckInterval") as? TimeInterval
+
+        XCTAssertEqual(interval, UpdateCheckFrequency.weekly.timeInterval)
+        XCTAssertEqual(UpdateCheckFrequency(closestTo: interval ?? 0), .weekly)
+    }
+}
+
 /// Sparkle drops `setAutomaticallyDownloadsUpdates:` while automatic checks are
 /// off, so Capso persists the preference by writing Sparkle's own key. These
 /// cover that storage directly, since no stand-in updater can catch it.
