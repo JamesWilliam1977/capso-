@@ -32,6 +32,10 @@ final class FakeSoftwareUpdater: SoftwareUpdating {
 
 /// The values Sparkle starts from before the user picks anything, which live in
 /// the app's Info.plist rather than in code.
+///
+/// These are deliberately unchanged by this feature: an existing install has
+/// nothing stored for them, so editing the plist would silently move everyone
+/// who upgrades. Anyone who wants a different interval can pick one.
 final class ShippedUpdateDefaultsTests: XCTestCase {
     func testAutomaticChecksAreOnByDefault() {
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "SUEnableAutomaticChecks") as? Bool, true)
@@ -41,11 +45,11 @@ final class ShippedUpdateDefaultsTests: XCTestCase {
         XCTAssertNil(Bundle.main.object(forInfoDictionaryKey: AutomaticInstallPreference.key))
     }
 
-    func testDefaultCheckFrequencyIsWeekly() {
+    func testDefaultCheckFrequencyIsDaily() {
         let interval = Bundle.main.object(forInfoDictionaryKey: "SUScheduledCheckInterval") as? TimeInterval
 
-        XCTAssertEqual(interval, UpdateCheckFrequency.weekly.timeInterval)
-        XCTAssertEqual(UpdateCheckFrequency(closestTo: interval ?? 0), .weekly)
+        XCTAssertEqual(interval, UpdateCheckFrequency.daily.timeInterval)
+        XCTAssertEqual(UpdateCheckFrequency(closestTo: interval ?? 0), .daily)
     }
 }
 
