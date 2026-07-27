@@ -215,7 +215,9 @@ final class UpdateManagerTests: XCTestCase {
         XCTAssertEqual(updater.automaticallyDownloadsUpdatesWriteCount, writes)
     }
 
-    func testAutomaticInstallCanStillBeChangedWhileAutomaticChecksAreOff() {
+    /// The row is greyed out in this state, but Sparkle's own update dialog can
+    /// still change the preference, and the write has to survive.
+    func testAutomaticInstallWritesStillPersistWhileAutomaticChecksAreOff() {
         let updater = FakeSoftwareUpdater()
         updater.automaticallyChecksForUpdates = false
         let manager = UpdateManager(updater: updater)

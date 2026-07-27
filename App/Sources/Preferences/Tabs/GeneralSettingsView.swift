@@ -43,10 +43,6 @@ struct GeneralSettingsView: View {
                 }
             }
 
-            if let updateManager {
-                UpdatesSettingsSection(updateManager: updateManager)
-            }
-
             SettingGroup(title: "Automation") {
                 SettingCard {
                     SettingRow(
@@ -78,6 +74,10 @@ struct GeneralSettingsView: View {
                             .controlSize(.small)
                     }
                 }
+            }
+
+            if let updateManager {
+                UpdatesSettingsSection(updateManager: updateManager)
             }
 
             SettingGroup(title: "History") {

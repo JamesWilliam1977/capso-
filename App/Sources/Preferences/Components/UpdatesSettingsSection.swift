@@ -6,7 +6,8 @@ import SharedKit
 ///
 /// Lives in its own view so it can observe `UpdateManager` directly: the
 /// frequency and auto-install rows have to grey out as soon as automatic
-/// checks are switched off.
+/// checks are switched off. Greying them leaves both stored values alone, so
+/// switching checks back on restores what the user had.
 struct UpdatesSettingsSection: View {
     @ObservedObject var updateManager: UpdateManager
 
@@ -38,6 +39,7 @@ struct UpdatesSettingsSection: View {
                     Toggle("", isOn: $updateManager.automaticallyDownloadsUpdates)
                         .toggleStyle(.switch)
                         .controlSize(.small)
+                        .disabled(!updateManager.automaticallyChecksForUpdates)
                 }
                 SettingRow(label: "Check for Updates", sublabel: "Look for a new version now", showDivider: true) {
                     CheckForUpdatesView(updateManager: updateManager)
