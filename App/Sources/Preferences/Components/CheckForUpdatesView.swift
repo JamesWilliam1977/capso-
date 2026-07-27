@@ -18,9 +18,6 @@ final class UpdateManager: NSObject, ObservableObject {
     }
 
     @Published private(set) var canCheckForUpdates = false
-    /// Whether the automatic-install option can be offered at all. Sparkle turns
-    /// this off while background checks are disabled.
-    @Published private(set) var canConfigureAutomaticInstall = true
     @Published private(set) var status: Status?
     @Published var automaticallyChecksForUpdates: Bool = true {
         didSet {
@@ -34,10 +31,12 @@ final class UpdateManager: NSObject, ObservableObject {
             updater.updateCheckInterval = updateCheckFrequency.timeInterval
         }
     }
+    /// Independent of `automaticallyChecksForUpdates`: switching background
+    /// checks off must not disturb what the user chose here.
     @Published var automaticallyDownloadsUpdates: Bool = false {
         didSet {
             guard oldValue != automaticallyDownloadsUpdates else { return }
-            updater.automaticallyDownloadsUpdates = automaticallyDownloadsUpdates
+            updater.storedAutomaticallyDownloadsUpdates = automaticallyDownloadsUpdates
         }
     }
 
@@ -49,7 +48,6 @@ final class UpdateManager: NSObject, ObservableObject {
     private var manualCheckState: ManualCheckState = .none
     private var probeFoundValidUpdate = false
     private var canCheckObservation: NSKeyValueObservation?
-    private var allowsAutomaticObservation: NSKeyValueObservation?
     private var autoCheckObservation: NSKeyValueObservation?
     private var autoDownloadObservation: NSKeyValueObservation?
     private var clearStatusTask: Task<Void, Never>?
@@ -72,10 +70,9 @@ final class UpdateManager: NSObject, ObservableObject {
         // Property observers don't run inside an initializer, so seeding these
         // never writes back to the updater.
         canCheckForUpdates = self.updater.canCheckForUpdates
-        canConfigureAutomaticInstall = self.updater.allowsAutomaticUpdates
         automaticallyChecksForUpdates = self.updater.automaticallyChecksForUpdates
         updateCheckFrequency = UpdateCheckFrequency(closestTo: self.updater.updateCheckInterval)
-        automaticallyDownloadsUpdates = self.updater.automaticallyDownloadsUpdates
+        automaticallyDownloadsUpdates = self.updater.storedAutomaticallyDownloadsUpdates
         startObservingSparkleUpdater()
     }
 
@@ -89,19 +86,17 @@ final class UpdateManager: NSObject, ObservableObject {
                 self?.canCheckForUpdates = updater.canCheckForUpdates
             }
         }
-        allowsAutomaticObservation = sparkleUpdater.observe(\.allowsAutomaticUpdates, options: [.initial, .new]) { [weak self] updater, _ in
-            Task { @MainActor in
-                self?.canConfigureAutomaticInstall = updater.allowsAutomaticUpdates
-            }
-        }
         autoCheckObservation = sparkleUpdater.observe(\.automaticallyChecksForUpdates, options: [.new]) { [weak self] updater, _ in
             Task { @MainActor in
                 self?.automaticallyChecksForUpdates = updater.automaticallyChecksForUpdates
             }
         }
+        // Sparkle's own update dialog can flip the auto-install preference, so
+        // stay in sync with it — but re-read the stored value rather than the
+        // masked one this notification carries.
         autoDownloadObservation = sparkleUpdater.observe(\.automaticallyDownloadsUpdates, options: [.new]) { [weak self] updater, _ in
             Task { @MainActor in
-                self?.automaticallyDownloadsUpdates = updater.automaticallyDownloadsUpdates
+                self?.automaticallyDownloadsUpdates = updater.storedAutomaticallyDownloadsUpdates
             }
         }
     }
@@ -131,38 +126,69 @@ final class UpdateManager: NSObject, ObservableObject {
         manualCheckState = .none
         probeFoundValidUpdate = false
     }
-}
 
-extension UpdateManager: SPUUpdaterDelegate {
-    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+    // MARK: Manual probe outcomes
+    //
+    // Split out from the `SPUUpdaterDelegate` callbacks, whose signatures require
+    // a live `SPUUpdater`, so the manual-check flow stays testable.
+
+    /// The silent probe found an update, so the interactive flow can take over.
+    func handleProbeFoundUpdate() {
         guard manualCheckState == .probing else { return }
         probeFoundValidUpdate = true
         status = nil
     }
 
-    func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
+    /// The silent probe found nothing.
+    func handleProbeFoundNoUpdate(error: any Error) {
         guard manualCheckState == .probing else { return }
         let message = error.localizedDescription.isEmpty ? String(localized: "You’re up to date!") : error.localizedDescription
         showStatus(message, kind: .success)
     }
 
-    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+    /// The silent probe was aborted. Sparkle reports "no update found" this way
+    /// too (error 1001), which `handleProbeFoundNoUpdate` has already covered.
+    func handleProbeAborted(error: any Error) {
         guard manualCheckState == .probing else { return }
         let nsError = error as NSError
         guard !(nsError.domain == SUSparkleErrorDomain && nsError.code == 1001) else { return }
         showStatus(error.localizedDescription, kind: .error, autoDismissAfter: .seconds(6))
     }
 
-    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
-        guard manualCheckState == .probing, updateCheck == .updateInformation else { return }
+    /// The silent probe finished. Hand over to Sparkle's interactive flow when
+    /// there is something to install.
+    ///
+    /// This is user-initiated, so Sparkle always presents the update rather than
+    /// installing it silently, whatever the automatic check and install settings
+    /// happen to be.
+    func handleProbeFinished(error: (any Error)?) {
+        guard manualCheckState == .probing else { return }
 
         let shouldLaunchInteractiveFlow = probeFoundValidUpdate && error == nil
         clearManualProbeState()
 
-        if shouldLaunchInteractiveFlow {
-            status = nil
-            updater.checkForUpdates()
-        }
+        guard shouldLaunchInteractiveFlow else { return }
+        status = nil
+        updater.checkForUpdates()
+    }
+}
+
+extension UpdateManager: SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        handleProbeFoundUpdate()
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
+        handleProbeFoundNoUpdate(error: error)
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
+        handleProbeAborted(error: error)
+    }
+
+    func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: (any Error)?) {
+        guard updateCheck == .updateInformation else { return }
+        handleProbeFinished(error: error)
     }
 }
 

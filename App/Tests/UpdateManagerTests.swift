@@ -7,7 +7,6 @@ import SharedKit
 @MainActor
 final class FakeSoftwareUpdater: SoftwareUpdating {
     var canCheckForUpdates = true
-    var allowsAutomaticUpdates = true
     var updateCheckInterval: TimeInterval = 86_400
     var checkForUpdateInformationCount = 0
     var checkForUpdatesCount = 0
@@ -17,7 +16,7 @@ final class FakeSoftwareUpdater: SoftwareUpdating {
     }
     private(set) var automaticallyChecksForUpdatesWriteCount = 0
 
-    var automaticallyDownloadsUpdates = false {
+    var storedAutomaticallyDownloadsUpdates = false {
         didSet { automaticallyDownloadsUpdatesWriteCount += 1 }
     }
     private(set) var automaticallyDownloadsUpdatesWriteCount = 0
@@ -31,12 +30,53 @@ final class FakeSoftwareUpdater: SoftwareUpdating {
     }
 }
 
+/// Sparkle drops `setAutomaticallyDownloadsUpdates:` while automatic checks are
+/// off, so Capso persists the preference by writing Sparkle's own key. These
+/// cover that storage directly, since no stand-in updater can catch it.
+final class AutomaticInstallPreferenceTests: XCTestCase {
+    private func makeDefaults(_ name: String) -> UserDefaults {
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return defaults
+    }
+
+    func testDefaultsToFalseWhenNothingIsStored() {
+        let defaults = makeDefaults("test.automaticInstall.unset")
+
+        XCTAssertFalse(AutomaticInstallPreference.value(in: defaults, fallback: nil))
+    }
+
+    func testFallsBackToTheInfoPlistValue() {
+        let defaults = makeDefaults("test.automaticInstall.fallback")
+
+        XCTAssertTrue(AutomaticInstallPreference.value(in: defaults, fallback: true))
+        XCTAssertFalse(AutomaticInstallPreference.value(in: defaults, fallback: false))
+    }
+
+    func testStoredValueWinsOverTheInfoPlistValue() {
+        let defaults = makeDefaults("test.automaticInstall.override")
+
+        AutomaticInstallPreference.setValue(false, in: defaults)
+
+        XCTAssertFalse(AutomaticInstallPreference.value(in: defaults, fallback: true))
+    }
+
+    func testWritingPersistsUnderSparklesOwnKey() {
+        let defaults = makeDefaults("test.automaticInstall.persist")
+
+        AutomaticInstallPreference.setValue(true, in: defaults)
+
+        XCTAssertTrue(AutomaticInstallPreference.value(in: defaults, fallback: nil))
+        XCTAssertEqual(defaults.object(forKey: "SUAutomaticallyUpdate") as? Bool, true)
+    }
+}
+
 @MainActor
 final class UpdateManagerTests: XCTestCase {
     func testInitReadsCurrentUpdaterState() {
         let updater = FakeSoftwareUpdater()
         updater.canCheckForUpdates = false
-        updater.automaticallyDownloadsUpdates = true
+        updater.storedAutomaticallyDownloadsUpdates = true
 
         let manager = UpdateManager(updater: updater)
 
@@ -130,33 +170,58 @@ final class UpdateManagerTests: XCTestCase {
         XCTAssertEqual(updater.updateCheckInterval, UpdateCheckFrequency.weekly.timeInterval)
     }
 
-    func testAutomaticInstallIsConfigurableWhenSparkleAllowsIt() {
+    func testDisablingAutomaticChecksLeavesTheAutomaticInstallToggleOn() {
         let updater = FakeSoftwareUpdater()
-        updater.allowsAutomaticUpdates = true
-
-        let manager = UpdateManager(updater: updater)
-
-        XCTAssertTrue(manager.canConfigureAutomaticInstall)
-    }
-
-    func testAutomaticInstallIsNotConfigurableWhenSparkleDisallowsIt() {
-        let updater = FakeSoftwareUpdater()
-        updater.allowsAutomaticUpdates = false
-
-        let manager = UpdateManager(updater: updater)
-
-        XCTAssertFalse(manager.canConfigureAutomaticInstall)
-    }
-
-    func testDisablingAutomaticChecksKeepsTheAutomaticInstallPreference() {
-        let updater = FakeSoftwareUpdater()
-        updater.automaticallyDownloadsUpdates = true
+        updater.storedAutomaticallyDownloadsUpdates = true
         let manager = UpdateManager(updater: updater)
 
         manager.automaticallyChecksForUpdates = false
 
-        XCTAssertTrue(updater.automaticallyDownloadsUpdates)
         XCTAssertTrue(manager.automaticallyDownloadsUpdates)
+        XCTAssertTrue(updater.storedAutomaticallyDownloadsUpdates)
+    }
+
+    func testDisablingAutomaticChecksNeverWritesTheAutomaticInstallPreference() {
+        let updater = FakeSoftwareUpdater()
+        updater.storedAutomaticallyDownloadsUpdates = true
+        let manager = UpdateManager(updater: updater)
+        let writes = updater.automaticallyDownloadsUpdatesWriteCount
+
+        manager.automaticallyChecksForUpdates = false
+
+        XCTAssertEqual(updater.automaticallyDownloadsUpdatesWriteCount, writes)
+    }
+
+    func testAutomaticInstallCanStillBeChangedWhileAutomaticChecksAreOff() {
+        let updater = FakeSoftwareUpdater()
+        updater.automaticallyChecksForUpdates = false
+        let manager = UpdateManager(updater: updater)
+
+        manager.automaticallyDownloadsUpdates = true
+
+        XCTAssertTrue(updater.storedAutomaticallyDownloadsUpdates)
+    }
+
+    func testInitReadsTheStoredAutomaticInstallPreferenceWhileChecksAreOff() {
+        let updater = FakeSoftwareUpdater()
+        updater.automaticallyChecksForUpdates = false
+        updater.storedAutomaticallyDownloadsUpdates = true
+
+        let manager = UpdateManager(updater: updater)
+
+        XCTAssertTrue(manager.automaticallyDownloadsUpdates)
+    }
+
+    func testEnablingAutomaticChecksLeavesTheAutomaticInstallToggleOff() {
+        let updater = FakeSoftwareUpdater()
+        updater.automaticallyChecksForUpdates = false
+        updater.storedAutomaticallyDownloadsUpdates = false
+        let manager = UpdateManager(updater: updater)
+
+        manager.automaticallyChecksForUpdates = true
+
+        XCTAssertFalse(manager.automaticallyDownloadsUpdates)
+        XCTAssertFalse(updater.storedAutomaticallyDownloadsUpdates)
     }
 
     func testManualCheckStillRunsWhileAutomaticChecksAreOff() {
@@ -178,6 +243,86 @@ final class UpdateManagerTests: XCTestCase {
         manager.checkForUpdates()
 
         XCTAssertEqual(updater.checkForUpdateInformationCount, 0)
+        XCTAssertNil(manager.status)
+    }
+
+    // MARK: Manual check with automatic checks off
+
+    func testManualCheckWithAutomaticChecksOffAndAutomaticInstallOnTouchesNoPreference() {
+        let updater = FakeSoftwareUpdater()
+        updater.automaticallyChecksForUpdates = false
+        updater.storedAutomaticallyDownloadsUpdates = true
+        let manager = UpdateManager(updater: updater)
+        let checkWrites = updater.automaticallyChecksForUpdatesWriteCount
+        let installWrites = updater.automaticallyDownloadsUpdatesWriteCount
+
+        manager.checkForUpdates()
+
+        XCTAssertEqual(updater.checkForUpdateInformationCount, 1)
+        XCTAssertEqual(updater.automaticallyChecksForUpdatesWriteCount, checkWrites)
+        XCTAssertEqual(updater.automaticallyDownloadsUpdatesWriteCount, installWrites)
+        XCTAssertFalse(manager.automaticallyChecksForUpdates)
+        XCTAssertTrue(manager.automaticallyDownloadsUpdates)
+    }
+
+    func testManualProbeThatFindsAnUpdateEscalatesToTheInteractiveFlow() {
+        let updater = FakeSoftwareUpdater()
+        updater.automaticallyChecksForUpdates = false
+        updater.storedAutomaticallyDownloadsUpdates = true
+        let manager = UpdateManager(updater: updater)
+
+        manager.checkForUpdates()
+        manager.handleProbeFoundUpdate()
+        manager.handleProbeFinished(error: nil)
+
+        XCTAssertEqual(updater.checkForUpdatesCount, 1)
+        XCTAssertNil(manager.status)
+    }
+
+    func testEscalatingAManualCheckLeavesBothPreferencesAlone() {
+        let updater = FakeSoftwareUpdater()
+        updater.automaticallyChecksForUpdates = false
+        updater.storedAutomaticallyDownloadsUpdates = true
+        let manager = UpdateManager(updater: updater)
+
+        manager.checkForUpdates()
+        manager.handleProbeFoundUpdate()
+        manager.handleProbeFinished(error: nil)
+
+        XCTAssertFalse(updater.automaticallyChecksForUpdates)
+        XCTAssertTrue(updater.storedAutomaticallyDownloadsUpdates)
+    }
+
+    func testManualProbeThatFindsNothingDoesNotEscalate() {
+        let updater = FakeSoftwareUpdater()
+        let manager = UpdateManager(updater: updater)
+
+        manager.checkForUpdates()
+        manager.handleProbeFinished(error: nil)
+
+        XCTAssertEqual(updater.checkForUpdatesCount, 0)
+    }
+
+    func testFailedManualProbeDoesNotEscalate() {
+        let updater = FakeSoftwareUpdater()
+        let manager = UpdateManager(updater: updater)
+        let failure = NSError(domain: "test.appcast", code: 42)
+
+        manager.checkForUpdates()
+        manager.handleProbeFoundUpdate()
+        manager.handleProbeFinished(error: failure)
+
+        XCTAssertEqual(updater.checkForUpdatesCount, 0)
+    }
+
+    func testProbeCallbacksArrivingOutsideAManualCheckAreIgnored() {
+        let updater = FakeSoftwareUpdater()
+        let manager = UpdateManager(updater: updater)
+
+        manager.handleProbeFoundUpdate()
+        manager.handleProbeFinished(error: nil)
+
+        XCTAssertEqual(updater.checkForUpdatesCount, 0)
         XCTAssertNil(manager.status)
     }
 

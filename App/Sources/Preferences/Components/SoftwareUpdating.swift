@@ -13,10 +13,12 @@ protocol SoftwareUpdating: AnyObject {
     var canCheckForUpdates: Bool { get }
     /// Whether Sparkle checks for updates in the background.
     var automaticallyChecksForUpdates: Bool { get set }
-    /// Whether found updates are downloaded and installed without asking.
-    var automaticallyDownloadsUpdates: Bool { get set }
-    /// Whether the automatic-install option can be turned on at all.
-    var allowsAutomaticUpdates: Bool { get }
+    /// The stored "install updates automatically" preference.
+    ///
+    /// Deliberately not `SPUUpdater.automaticallyDownloadsUpdates`: that getter
+    /// reports `false` whenever automatic checks are off, which would drag the
+    /// two settings around together.
+    var storedAutomaticallyDownloadsUpdates: Bool { get set }
     /// How often background checks run, in seconds.
     var updateCheckInterval: TimeInterval { get set }
 
@@ -26,4 +28,37 @@ protocol SoftwareUpdating: AnyObject {
     func checkForUpdates()
 }
 
-extension SPUUpdater: SoftwareUpdating {}
+/// Reads and writes Sparkle's persisted "install updates automatically"
+/// preference, bypassing `SPUUpdater`'s accessors for it.
+///
+/// Both of Sparkle's accessors are gated on `allowsAutomaticUpdates`, which is
+/// itself tied to `automaticallyChecksForUpdates`: the getter reports `false`
+/// and the setter silently drops the write while background checks are off
+/// (`SPUUpdaterSettings.setAutomaticallyDownloadsUpdates:`). Capso keeps the two
+/// settings independent, so it goes to the stored value directly. Sparkle
+/// observes this key and picks the change up on its own.
+enum AutomaticInstallPreference {
+    static let key = "SUAutomaticallyUpdate"
+
+    /// - Parameter fallback: The bundle's `SUAutomaticallyUpdate` value, used
+    ///   until the user has made a choice.
+    static func value(in defaults: UserDefaults, fallback: Bool?) -> Bool {
+        defaults.object(forKey: key) as? Bool ?? fallback ?? false
+    }
+
+    static func setValue(_ newValue: Bool, in defaults: UserDefaults) {
+        defaults.set(newValue, forKey: key)
+    }
+}
+
+extension SPUUpdater: SoftwareUpdating {
+    var storedAutomaticallyDownloadsUpdates: Bool {
+        get {
+            AutomaticInstallPreference.value(
+                in: .standard,
+                fallback: Bundle.main.object(forInfoDictionaryKey: AutomaticInstallPreference.key) as? Bool
+            )
+        }
+        set { AutomaticInstallPreference.setValue(newValue, in: .standard) }
+    }
+}

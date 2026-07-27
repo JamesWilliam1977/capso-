@@ -38,7 +38,6 @@ struct UpdatesSettingsSection: View {
                     Toggle("", isOn: $updateManager.automaticallyDownloadsUpdates)
                         .toggleStyle(.switch)
                         .controlSize(.small)
-                        .disabled(!updateManager.canConfigureAutomaticInstall)
                 }
                 SettingRow(label: "Check for Updates", sublabel: "Look for a new version now", showDivider: true) {
                     CheckForUpdatesView(updateManager: updateManager)
