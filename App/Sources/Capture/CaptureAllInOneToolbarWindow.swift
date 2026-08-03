@@ -1161,7 +1161,9 @@ final class AllInOneSelectionOverlayView: NSView {
     var onSelectionPreviewChanged: ((CGRect) -> Void)?
     var onSelectionChanged: ((CGRect) -> Void)?
     var onCancel: (() -> Void)?
-    var passesThroughSelectionBody = false
+    var passesThroughSelectionBody = false {
+        didSet { window?.invalidateCursorRects(for: self) }
+    }
 
     private enum DragOperation {
         case none
@@ -1180,6 +1182,14 @@ final class AllInOneSelectionOverlayView: NSView {
     private let minSelectionSize: CGSize
     private var activePreset: CapturePreset
     private let hitSlop: CGFloat = 26
+    /// Resize hot-zone reach while annotating (`passesThroughSelectionBody`).
+    /// The inner reach stays thin so a drag starting near—but inside—the edge
+    /// begins an annotation instead of a resize; it still covers the 3.5pt
+    /// inner radius of the drawn handle dots so clicking a visible handle
+    /// always resizes. The outer reach stays generous because nothing outside
+    /// the selection competes for those points.
+    private let annotationInnerHitSlop: CGFloat = 4
+    private let annotationOuterHitSlop: CGFloat = 12
     private var dragOperation: DragOperation = .none
     private var trackingArea: NSTrackingArea?
     /// Whether Shift is currently held, locking the drag to a 1:1 square.
@@ -1266,52 +1276,55 @@ final class AllInOneSelectionOverlayView: NSView {
             return
         }
 
-        let slop = hitSlop
-        let handleSize = slop * 2
-        let horizontalEdgeWidth = max(0, rect.width - handleSize)
-        let verticalEdgeHeight = max(0, rect.height - handleSize)
+        // Match `hitTarget(at:)`: while annotating, the resize zones stay thin
+        // inside the selection so they don't overlap the annotation area.
+        let innerSlop = passesThroughSelectionBody ? annotationInnerHitSlop : hitSlop
+        let outerSlop = passesThroughSelectionBody ? annotationOuterHitSlop : hitSlop
+        let bandWidth = innerSlop + outerSlop
+        let horizontalEdgeWidth = max(0, rect.width - innerSlop * 2)
+        let verticalEdgeHeight = max(0, rect.height - innerSlop * 2)
 
         addCursorRect(
-            CGRect(x: rect.minX - slop, y: rect.maxY - slop, width: handleSize, height: handleSize),
+            CGRect(x: rect.minX - outerSlop, y: rect.maxY - innerSlop, width: bandWidth, height: bandWidth),
             cursor: AllInOneResizeCursor.topLeft
         )
         addCursorRect(
-            CGRect(x: rect.maxX - slop, y: rect.maxY - slop, width: handleSize, height: handleSize),
+            CGRect(x: rect.maxX - innerSlop, y: rect.maxY - innerSlop, width: bandWidth, height: bandWidth),
             cursor: AllInOneResizeCursor.topRight
         )
         addCursorRect(
-            CGRect(x: rect.maxX - slop, y: rect.minY - slop, width: handleSize, height: handleSize),
+            CGRect(x: rect.maxX - innerSlop, y: rect.minY - outerSlop, width: bandWidth, height: bandWidth),
             cursor: AllInOneResizeCursor.bottomRight
         )
         addCursorRect(
-            CGRect(x: rect.minX - slop, y: rect.minY - slop, width: handleSize, height: handleSize),
+            CGRect(x: rect.minX - outerSlop, y: rect.minY - outerSlop, width: bandWidth, height: bandWidth),
             cursor: AllInOneResizeCursor.bottomLeft
         )
 
         if horizontalEdgeWidth > 0 {
             addCursorRect(
-                CGRect(x: rect.minX + slop, y: rect.maxY - slop, width: horizontalEdgeWidth, height: handleSize),
+                CGRect(x: rect.minX + innerSlop, y: rect.maxY - innerSlop, width: horizontalEdgeWidth, height: bandWidth),
                 cursor: AllInOneResizeCursor.vertical
             )
             addCursorRect(
-                CGRect(x: rect.minX + slop, y: rect.minY - slop, width: horizontalEdgeWidth, height: handleSize),
+                CGRect(x: rect.minX + innerSlop, y: rect.minY - outerSlop, width: horizontalEdgeWidth, height: bandWidth),
                 cursor: AllInOneResizeCursor.vertical
             )
         }
 
         if verticalEdgeHeight > 0 {
             addCursorRect(
-                CGRect(x: rect.minX - slop, y: rect.minY + slop, width: handleSize, height: verticalEdgeHeight),
+                CGRect(x: rect.minX - outerSlop, y: rect.minY + innerSlop, width: bandWidth, height: verticalEdgeHeight),
                 cursor: AllInOneResizeCursor.horizontal
             )
             addCursorRect(
-                CGRect(x: rect.maxX - slop, y: rect.minY + slop, width: handleSize, height: verticalEdgeHeight),
+                CGRect(x: rect.maxX - innerSlop, y: rect.minY + innerSlop, width: bandWidth, height: verticalEdgeHeight),
                 cursor: AllInOneResizeCursor.horizontal
             )
         }
 
         if !passesThroughSelectionBody {
-            let bodyRect = rect.insetBy(dx: slop, dy: slop)
+            let bodyRect = rect.insetBy(dx: innerSlop, dy: innerSlop)
             if bodyRect.width > 0, bodyRect.height > 0 {
                 addCursorRect(bodyRect, cursor: .openHand)
             }
@@ -1330,11 +1343,7 @@ final class AllInOneSelectionOverlayView: NSView {
         squareLock = event.modifierFlags.contains(.shift)
 
         if let fixedSize = activePreset.fixedPixelSize {
-            if CaptureSelectionGeometry.hitTarget(
-                at: point,
-                selectionRect: selectionRect,
-                hitSlop: hitSlop
-            ) != nil {
+            if hitTarget(at: point) != nil {
                 dragOperation = .move(startRect: selectionRect, startPoint: point)
                 NSCursor.closedHand.set()
                 return
@@ -1352,11 +1361,7 @@ final class AllInOneSelectionOverlayView: NSView {
             return
         }
 
-        switch CaptureSelectionGeometry.hitTarget(
-            at: point,
-            selectionRect: selectionRect,
-            hitSlop: hitSlop
-        ) {
+        switch hitTarget(at: point) {
         case .resize(let handle):
             dragOperation = .resize(handle: handle, startRect: selectionRect)
             cursor(for: .resize(handle), at: point).set()
@@ -1506,23 +1511,41 @@ final class AllInOneSelectionOverlayView: NSView {
         }
 
         cursor(
-            for: CaptureSelectionGeometry.hitTarget(
-                at: point,
-                selectionRect: selectionRect,
-                hitSlop: hitSlop
-            ),
+            for: hitTarget(at: point),
             at: point,
         ).set()
     }
 
-    func wantsMouseEvents(at point: CGPoint) -> Bool {
-        guard passesThroughSelectionBody else { return true }
-
-        switch CaptureSelectionGeometry.hitTarget(
+    /// Hit test used by mouse handling, cursor feedback, and event pass-through.
+    /// While annotating (`passesThroughSelectionBody`), the resize hot zone
+    /// reaches only a few points inside the selection so near-edge drags can
+    /// start an annotation; during initial selection the full `hitSlop` applies.
+    private func hitTarget(at point: CGPoint) -> CaptureSelectionHitTarget? {
+        if passesThroughSelectionBody {
+            return CaptureSelectionGeometry.hitTarget(
+                at: point,
+                selectionRect: selectionRect,
+                innerSlop: annotationInnerHitSlop,
+                outerSlop: annotationOuterHitSlop
+            )
+        }
+        return CaptureSelectionGeometry.hitTarget(
             at: point,
             selectionRect: selectionRect,
             hitSlop: hitSlop
-        ) {
+        )
+    }
+
+    func wantsMouseEvents(at point: CGPoint) -> Bool {
+        guard passesThroughSelectionBody else { return true }
+        // Keep capturing for the whole gesture once a drag starts: the window's
+        // ignoresMouseEvents is re-evaluated on every event, so without this a
+        // pointer that strays from the edge mid-resize (min-size clamping,
+        // aspect ratio, fast movement) would flip the window to click-through
+        // and the drag would lose its mouseUp.
+        if case .none = dragOperation {} else { return true }
+
+        switch hitTarget(at: point) {
         case .resize:
             return true
         case .move:
