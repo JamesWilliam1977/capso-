@@ -139,20 +139,21 @@ final class AnnotationEditorWindow: NSPanel, NSWindowDelegate {
         resizeAndCenter(preferredContentSize: imageContentSize, hostingView: hostingView)
     }
 
-    /// Grows the window to whatever the SwiftUI tree needs before centering it.
+    /// Grows the window to whatever the SwiftUI tree wants before centering it.
     ///
     /// The toolbar is a row of fixed-width controls, so the hosting view has a
-    /// wide intrinsic size that AppKit installs as `contentMinSize` and applies
-    /// on a later runloop pass — widening the window from its existing origin
-    /// and dragging it off-center. Sizing to that minimum up front means the
-    /// frame we center is the frame that survives (issue #236).
+    /// wide fitting size that AppKit applies on a later runloop pass — widening
+    /// the window from its existing origin and dragging it off-center. Sizing
+    /// to it up front means the frame we center is the frame that survives
+    /// (issue #236).
     private func resizeAndCenter(preferredContentSize: CGSize, hostingView: NSHostingView<AnnotationEditorView>) {
         // `contentMinSize` is still zero at this point; the hosting view's own
-        // fitting size is what AppKit will eventually derive it from.
+        // fitting size is what AppKit will eventually derive the window's
+        // preferred width from.
         hostingView.layoutSubtreeIfNeeded()
         let resolvedContentSize = AnnotationEditorWindowGeometry.resolvedContentSize(
             preferred: preferredContentSize,
-            minimum: hostingView.fittingSize,
+            fitting: hostingView.fittingSize,
             visibleSize: anchorVisibleFrame.size
         )
         preferredFrame = Self.centeredFrame(contentSize: resolvedContentSize, in: anchorVisibleFrame)

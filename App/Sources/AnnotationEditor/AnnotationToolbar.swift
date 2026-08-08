@@ -45,18 +45,25 @@ struct AnnotationToolbar: View {
     var body: some View {
         VStack(spacing: 6) {
             HStack(spacing: 12) {
-                toolGroup
-                toolbarDivider
-                colorGroup
-                toolbarDivider
-                strokeGroup
-                toolbarDivider
-                cropGroup
-                toolbarDivider
-                beautifyGroup
-                toolbarDivider
-                undoGroup
-                Spacer()
+                // Only the editing tools scroll. The actions stay pinned so
+                // Save/Copy/Close never slide out of reach on a display too
+                // narrow for the toolbar's full width (issue #236).
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        toolGroup
+                        toolbarDivider
+                        colorGroup
+                        toolbarDivider
+                        strokeGroup
+                        toolbarDivider
+                        cropGroup
+                        toolbarDivider
+                        beautifyGroup
+                        toolbarDivider
+                        undoGroup
+                    }
+                }
+                Spacer(minLength: 0)
                 actionGroup
             }
 

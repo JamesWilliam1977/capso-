@@ -7,9 +7,9 @@ import SharedKit
 final class AnnotationEditorWindowCenteringTests: XCTestCase {
     /// The regression from issue #236: a capture small enough that the
     /// image-derived width falls below the toolbar's intrinsic width. AppKit
-    /// installs the hosting view's `contentMinSize` and applies it a runloop
-    /// pass *after* the window has been positioned, widening it rightwards
-    /// from a fixed origin and dragging it off-center.
+    /// applied the hosting view's size a runloop pass *after* the window had
+    /// been positioned, widening it rightwards from a fixed origin and
+    /// dragging it off-center.
     func testSmallCaptureStaysCenteredAfterAppKitAppliesMinimumSize() throws {
         let screen = try XCTUnwrap(NSScreen.main)
         let window = try makeWindow(pixelWidth: 600, pixelHeight: 400, screen: screen)
@@ -48,16 +48,31 @@ final class AnnotationEditorWindowCenteringTests: XCTestCase {
         // The SwiftUI tree must not have forced it any wider.
         XCTAssertEqual(window.frame.width, sizeBeforeShow.width, accuracy: 1)
         XCTAssertEqual(window.frame.height, sizeBeforeShow.height, accuracy: 1)
-        // The 6000px image must have been scaled into the viewport budget. The
-        // only thing allowed to exceed the display is the toolbar's own floor,
-        // measured here from a window built around a negligible image.
-        let toolbarFloor = try makeWindow(pixelWidth: 10, pixelHeight: 10, screen: screen)
-        defer { toolbarFloor.close() }
         XCTAssertLessThanOrEqual(
-            window.frame.width,
-            max(toolbarFloor.frame.width, screen.visibleFrame.width) + 1,
+            window.frame.width, screen.visibleFrame.width + 1,
             "6000px capture was not scaled into the viewport: \(window.frame)"
         )
+    }
+
+    /// The toolbar's tool row scrolls, so its natural width is a preference the
+    /// display can override. Without that, a display narrower than the toolbar
+    /// gets a window it cannot fit or center — which is what CI's 1024pt-wide
+    /// runner hits.
+    func testWindowNeverOutgrowsTheDisplayWidth() throws {
+        let screen = try XCTUnwrap(NSScreen.main)
+
+        for pixelWidth in [10, 600, 6000] {
+            let window = try makeWindow(pixelWidth: pixelWidth, pixelHeight: 400, screen: screen)
+            defer { window.close() }
+            window.show()
+            settleLayout()
+
+            XCTAssertLessThanOrEqual(
+                window.frame.width, screen.visibleFrame.width + 1,
+                "\(pixelWidth)px capture produced a window wider than the display: \(window.frame)"
+            )
+            assertPlacedOnScreen(window, on: screen)
+        }
     }
 
     /// `show()` positions the window once. A window the user has dragged

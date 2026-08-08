@@ -63,11 +63,11 @@ struct AnnotationEditorWindowGeometryTests {
         #expect(abs(size.height - 640) < 0.001)
     }
 
-    @Test("Grows to the SwiftUI tree's minimum when the image is smaller")
-    func minimumWins() {
+    @Test("Grows to the toolbar's natural width when the image is smaller")
+    func fittingWins() {
         let size = AnnotationEditorWindowGeometry.resolvedContentSize(
             preferred: CGSize(width: 300, height: 250),
-            minimum: CGSize(width: 1234, height: 67),
+            fitting: CGSize(width: 1234, height: 67),
             visibleSize: CGSize(width: 1920, height: 1050)
         )
 
@@ -75,11 +75,11 @@ struct AnnotationEditorWindowGeometryTests {
         #expect(size.height == 250)
     }
 
-    @Test("Keeps the image size when it already clears the minimum")
+    @Test("Keeps the image size when it already clears the toolbar")
     func preferredWins() {
         let size = AnnotationEditorWindowGeometry.resolvedContentSize(
             preferred: CGSize(width: 1500, height: 800),
-            minimum: CGSize(width: 1234, height: 67),
+            fitting: CGSize(width: 1234, height: 67),
             visibleSize: CGSize(width: 1920, height: 1050)
         )
 
@@ -91,7 +91,7 @@ struct AnnotationEditorWindowGeometryTests {
     func visibleSizeCaps() {
         let size = AnnotationEditorWindowGeometry.resolvedContentSize(
             preferred: CGSize(width: 4000, height: 3000),
-            minimum: CGSize(width: 1234, height: 67),
+            fitting: CGSize(width: 1234, height: 67),
             visibleSize: CGSize(width: 1920, height: 1050)
         )
 
@@ -99,25 +99,25 @@ struct AnnotationEditorWindowGeometryTests {
         #expect(size.height == 1050)
     }
 
-    @Test("Honors a minimum wider than the display rather than clipping the toolbar")
-    func minimumBeatsAnUndersizedDisplay() {
+    @Test("Caps a toolbar wider than the display instead of overflowing it")
+    func displayBeatsAnOversizedToolbar() {
         let size = AnnotationEditorWindowGeometry.resolvedContentSize(
             preferred: CGSize(width: 900, height: 500),
-            minimum: CGSize(width: 1234, height: 67),
+            fitting: CGSize(width: 1234, height: 67),
             visibleSize: CGSize(width: 1100, height: 700)
         )
 
-        // Capping at 1100 would just be undone when AppKit re-applies
-        // `contentMinSize`, so the minimum has to win.
-        #expect(size.width == 1234)
+        // The tool row scrolls, so 1234 is only a preference — the window has
+        // to stay on the display and can still be centered there.
+        #expect(size.width == 1100)
         #expect(size.height == 500)
     }
 
-    @Test("Falls back to the minimum when the image budget degenerates to zero")
-    func degenerateImageBudgetUsesMinimum() {
+    @Test("Falls back to the toolbar size when the image budget degenerates to zero")
+    func degenerateImageBudgetUsesFittingSize() {
         let size = AnnotationEditorWindowGeometry.resolvedContentSize(
             preferred: .zero,
-            minimum: CGSize(width: 1234, height: 67),
+            fitting: CGSize(width: 1234, height: 67),
             visibleSize: CGSize(width: 1920, height: 1050)
         )
 

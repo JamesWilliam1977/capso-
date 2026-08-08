@@ -8,11 +8,12 @@ import CoreGraphics
 ///    but `NSWindow` frames are measured in points, so pixels have to be
 ///    divided by the screen's backing scale before they mean anything.
 /// 2. The editor's SwiftUI toolbar is a row of fixed-width controls, so the
-///    hosting view has a large intrinsic width. AppKit turns that into the
-///    window's `contentMinSize` and enforces it on a *later* runloop pass,
-///    growing the window rightwards from its existing origin. A frame that
-///    ignores that minimum gets silently widened and pushed off-center after
-///    it has already been positioned.
+///    hosting view wants far more width than a small capture needs. AppKit
+///    applies that want on a *later* runloop pass, growing the window
+///    rightwards from its existing origin — so a frame that ignores it gets
+///    silently widened and pushed off-center after being positioned. The
+///    window is therefore sized to it up front, and the toolbar's tool row
+///    scrolls so that width stays a preference the display can override.
 public enum AnnotationEditorWindowGeometry {
     /// Content-area size (points) for an image that must fit inside a fraction
     /// of the screen, leaving vertical room for toolbar / zoom chrome.
@@ -50,35 +51,34 @@ public enum AnnotationEditorWindowGeometry {
     /// actually needs, so the window is born at the size AppKit would force it
     /// to anyway.
     ///
-    /// `minimum` wins over `preferred` because AppKit will apply it regardless;
-    /// `visibleSize` then caps the result so an unusually greedy layout can't
-    /// push the window past the display. The cap never goes below `minimum` —
-    /// shrinking under it would just be undone on the next layout pass.
+    /// `fitting` is the size the SwiftUI tree would like — in practice the
+    /// toolbar's natural width. The window grows to it so every editing tool is
+    /// visible without scrolling, but it is a preference rather than a floor,
+    /// because the toolbar scrolls horizontally when squeezed. That lets
+    /// `visibleSize` cap it outright, which is what keeps the window on a
+    /// display too narrow for the whole toolbar.
     public static func resolvedContentSize(
         preferred: CGSize,
-        minimum: CGSize,
+        fitting: CGSize,
         visibleSize: CGSize
     ) -> CGSize {
         CGSize(
-            width: resolve(preferred: preferred.width, minimum: minimum.width, visible: visibleSize.width),
-            height: resolve(preferred: preferred.height, minimum: minimum.height, visible: visibleSize.height)
+            width: resolve(preferred: preferred.width, fitting: fitting.width, visible: visibleSize.width),
+            height: resolve(preferred: preferred.height, fitting: fitting.height, visible: visibleSize.height)
         )
     }
 
-    private static func resolve(preferred: CGFloat, minimum: CGFloat, visible: CGFloat) -> CGFloat {
-        let floorValue = max(minimum, 0)
-        let ceilingValue = max(floorValue, visible)
-        return min(max(preferred, floorValue), ceilingValue)
+    private static func resolve(preferred: CGFloat, fitting: CGFloat, visible: CGFloat) -> CGFloat {
+        min(max(preferred, max(fitting, 0)), max(visible, 0))
     }
 
     /// Centers a window frame of `size` inside `visibleFrame` (absolute desktop
     /// coordinates), keeping it on the display.
     ///
-    /// An axis larger than `visibleFrame` cannot be centered — the toolbar's
-    /// minimum width can exceed a small display — so it is pinned to the
-    /// visible origin instead of overhanging both edges. AppKit would clamp it
-    /// anyway; doing it here keeps the frame we compute and the frame we get
-    /// the same. Returns `.zero` when either input is empty.
+    /// An axis larger than `visibleFrame` cannot be centered, so it is pinned
+    /// to the visible origin instead of overhanging both edges. AppKit would
+    /// clamp it anyway; doing it here keeps the frame we compute and the frame
+    /// we get the same. Returns `.zero` when either input is empty.
     public static func centeredFrame(size: CGSize, in visibleFrame: CGRect) -> CGRect {
         guard size.width > 0,
               size.height > 0,
