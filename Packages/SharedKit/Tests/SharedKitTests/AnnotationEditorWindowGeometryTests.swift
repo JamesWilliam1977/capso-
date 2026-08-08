@@ -63,6 +63,68 @@ struct AnnotationEditorWindowGeometryTests {
         #expect(abs(size.height - 640) < 0.001)
     }
 
+    @Test("Grows to the SwiftUI tree's minimum when the image is smaller")
+    func minimumWins() {
+        let size = AnnotationEditorWindowGeometry.resolvedContentSize(
+            preferred: CGSize(width: 300, height: 250),
+            minimum: CGSize(width: 1234, height: 67),
+            visibleSize: CGSize(width: 1920, height: 1050)
+        )
+
+        #expect(size.width == 1234)
+        #expect(size.height == 250)
+    }
+
+    @Test("Keeps the image size when it already clears the minimum")
+    func preferredWins() {
+        let size = AnnotationEditorWindowGeometry.resolvedContentSize(
+            preferred: CGSize(width: 1500, height: 800),
+            minimum: CGSize(width: 1234, height: 67),
+            visibleSize: CGSize(width: 1920, height: 1050)
+        )
+
+        #expect(size.width == 1500)
+        #expect(size.height == 800)
+    }
+
+    @Test("Never exceeds the visible display")
+    func visibleSizeCaps() {
+        let size = AnnotationEditorWindowGeometry.resolvedContentSize(
+            preferred: CGSize(width: 4000, height: 3000),
+            minimum: CGSize(width: 1234, height: 67),
+            visibleSize: CGSize(width: 1920, height: 1050)
+        )
+
+        #expect(size.width == 1920)
+        #expect(size.height == 1050)
+    }
+
+    @Test("Honors a minimum wider than the display rather than clipping the toolbar")
+    func minimumBeatsAnUndersizedDisplay() {
+        let size = AnnotationEditorWindowGeometry.resolvedContentSize(
+            preferred: CGSize(width: 900, height: 500),
+            minimum: CGSize(width: 1234, height: 67),
+            visibleSize: CGSize(width: 1100, height: 700)
+        )
+
+        // Capping at 1100 would just be undone when AppKit re-applies
+        // `contentMinSize`, so the minimum has to win.
+        #expect(size.width == 1234)
+        #expect(size.height == 500)
+    }
+
+    @Test("Falls back to the minimum when the image budget degenerates to zero")
+    func degenerateImageBudgetUsesMinimum() {
+        let size = AnnotationEditorWindowGeometry.resolvedContentSize(
+            preferred: .zero,
+            minimum: CGSize(width: 1234, height: 67),
+            visibleSize: CGSize(width: 1920, height: 1050)
+        )
+
+        #expect(size.width == 1234)
+        #expect(size.height == 67)
+    }
+
     @Test("Centers a frame inside the visible display rect")
     func centersFrameInVisibleRect() {
         let frame = AnnotationEditorWindowGeometry.centeredFrame(

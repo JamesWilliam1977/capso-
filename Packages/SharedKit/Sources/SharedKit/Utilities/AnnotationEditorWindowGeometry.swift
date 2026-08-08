@@ -2,10 +2,17 @@ import CoreGraphics
 
 /// Pure layout math for the full-screen-independent Annotate window.
 ///
-/// Capture images are pixel-backed (Retina screenshots are typically 2×), but
-/// `NSWindow` frames are measured in points. Treating pixel dimensions as
-/// points makes the window oversized — often larger than the visible display
-/// — and AppKit then clamps it off-center (issue #236).
+/// Two things have to line up for the window to open centered (issue #236):
+///
+/// 1. Capture images are pixel-backed (Retina screenshots are typically 2×),
+///    but `NSWindow` frames are measured in points, so pixels have to be
+///    divided by the screen's backing scale before they mean anything.
+/// 2. The editor's SwiftUI toolbar is a row of fixed-width controls, so the
+///    hosting view has a large intrinsic width. AppKit turns that into the
+///    window's `contentMinSize` and enforces it on a *later* runloop pass,
+///    growing the window rightwards from its existing origin. A frame that
+///    ignores that minimum gets silently widened and pushed off-center after
+///    it has already been positioned.
 public enum AnnotationEditorWindowGeometry {
     /// Content-area size (points) for an image that must fit inside a fraction
     /// of the screen, leaving vertical room for toolbar / zoom chrome.
@@ -37,6 +44,31 @@ public enum AnnotationEditorWindowGeometry {
             width: pointWidth * fitScale,
             height: pointHeight * fitScale + max(chromeHeight, 0)
         )
+    }
+
+    /// Reconciles the image-derived content size with the size the SwiftUI tree
+    /// actually needs, so the window is born at the size AppKit would force it
+    /// to anyway.
+    ///
+    /// `minimum` wins over `preferred` because AppKit will apply it regardless;
+    /// `visibleSize` then caps the result so an unusually greedy layout can't
+    /// push the window past the display. The cap never goes below `minimum` —
+    /// shrinking under it would just be undone on the next layout pass.
+    public static func resolvedContentSize(
+        preferred: CGSize,
+        minimum: CGSize,
+        visibleSize: CGSize
+    ) -> CGSize {
+        CGSize(
+            width: resolve(preferred: preferred.width, minimum: minimum.width, visible: visibleSize.width),
+            height: resolve(preferred: preferred.height, minimum: minimum.height, visible: visibleSize.height)
+        )
+    }
+
+    private static func resolve(preferred: CGFloat, minimum: CGFloat, visible: CGFloat) -> CGFloat {
+        let floorValue = max(minimum, 0)
+        let ceilingValue = max(floorValue, visible)
+        return min(max(preferred, floorValue), ceilingValue)
     }
 
     /// Centers a window frame of `size` inside `visibleFrame` (absolute desktop

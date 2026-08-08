@@ -791,20 +791,37 @@ private struct InlineAnnotationToolbar: View {
 
     @ViewBuilder
     private var copyActionButton: some View {
-        let button = iconButton(systemName: "doc.on.doc", help: "Copy Image and Close", action: onCopy)
-            .keyboardShortcut("c", modifiers: [.command, .shift])
+        let button = iconButton(
+            systemName: "doc.on.doc",
+            help: "Copy Image and Close (⌘C · ⏎ · ⌘⇧C)",
+            action: onCopy
+        )
+        .keyboardShortcut("c", modifiers: [.command, .shift])
         if isEditingText {
+            // Leave ⌘C and Return to the text field being edited.
             button
         } else {
             button.background {
-                Button(action: onCopy) { EmptyView() }
-                    .keyboardShortcut(.return, modifiers: [])
-                    .buttonStyle(.plain)
-                    .frame(width: 0, height: 0)
-                    .opacity(0)
-                    .accessibilityHidden(true)
+                ZStack {
+                    hiddenCopyShortcut(.return, modifiers: [])
+                    // Plain ⌘C only reaches here when the canvas declined it,
+                    // i.e. no annotation object is selected (issue #236/#237).
+                    hiddenCopyShortcut(KeyEquivalent("c"), modifiers: .command)
+                }
             }
         }
+    }
+
+    private func hiddenCopyShortcut(
+        _ key: KeyEquivalent,
+        modifiers: EventModifiers
+    ) -> some View {
+        Button(action: onCopy) { EmptyView() }
+            .keyboardShortcut(key, modifiers: modifiers)
+            .buttonStyle(.plain)
+            .frame(width: 0, height: 0)
+            .opacity(0)
+            .accessibilityHidden(true)
     }
 
     private var textEffectsGroup: some View {
