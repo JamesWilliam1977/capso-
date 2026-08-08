@@ -126,6 +126,77 @@ final class AnnotationCanvasClipboardShortcutTests: XCTestCase {
         XCTAssertEqual(pasted.rect, source.rect)
     }
 
+    /// Issue #236: with no annotation object selected, ⌘C in the full editor
+    /// must fall back to copy-image-and-close instead of doing nothing.
+    func testFullEditorCommandCFallsBackToCopyRenderedImageWhenNothingIsSelected() throws {
+        let copied = expectation(description: "Full editor image copied with ⌘C")
+        let window = AnnotationEditorWindow(
+            image: try makeImage(),
+            screenshotOutputPreset: .losslessPNG,
+            screenshotFilenameTemplate: "Screenshot",
+            onSave: { _ in true },
+            onCopy: { _ in copied.fulfill() },
+            onPin: { _, _ in },
+            onClose: {}
+        )
+        defer { window.close() }
+
+        window.show()
+        window.contentView?.layoutSubtreeIfNeeded()
+        window.sendEvent(try commandEvent(character: "c", keyCode: 8, windowNumber: window.windowNumber))
+
+        wait(for: [copied], timeout: 1)
+    }
+
+    func testInlineEditorCommandCFallsBackToCopyRenderedImageWhenNothingIsSelected() throws {
+        let screen = try XCTUnwrap(NSScreen.main)
+        let copied = expectation(description: "Inline editor image copied with ⌘C")
+        let window = InlineAnnotationEditorWindow(
+            image: try makeImage(),
+            screen: screen,
+            screenLocalRect: CGRect(x: 100, y: 100, width: 400, height: 300),
+            onSave: { _ in },
+            onCopy: { _ in copied.fulfill() },
+            onPin: { _, _ in },
+            onClose: {}
+        )
+        defer { window.close() }
+
+        window.show()
+        window.contentView?.layoutSubtreeIfNeeded()
+        window.sendEvent(try commandEvent(character: "c", keyCode: 8, windowNumber: window.windowNumber))
+
+        wait(for: [copied], timeout: 1)
+    }
+
+    /// ⌘C must not copy-and-close out from under a focused text responder —
+    /// the keystroke belongs to the text being edited.
+    func testFullEditorCommandCDoesNotCopyTheImageWhileATextResponderHasFocus() throws {
+        let copied = expectation(description: "Image must not be copied while editing text")
+        copied.isInverted = true
+        let window = AnnotationEditorWindow(
+            image: try makeImage(),
+            screenshotOutputPreset: .losslessPNG,
+            screenshotFilenameTemplate: "Screenshot",
+            onSave: { _ in true },
+            onCopy: { _ in copied.fulfill() },
+            onPin: { _, _ in },
+            onClose: {}
+        )
+        defer { window.close() }
+
+        window.show()
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        let textView = NSTextView()
+        window.contentView?.addSubview(textView)
+        XCTAssertTrue(window.makeFirstResponder(textView))
+
+        window.sendEvent(try commandEvent(character: "c", keyCode: 8, windowNumber: window.windowNumber))
+
+        wait(for: [copied], timeout: 0.5)
+    }
+
     func testFullEditorReturnCopiesTheRenderedImage() throws {
         let copied = expectation(description: "Full editor image copied with Return")
         let window = AnnotationEditorWindow(
