@@ -72,7 +72,13 @@ public enum AnnotationEditorWindowGeometry {
     }
 
     /// Centers a window frame of `size` inside `visibleFrame` (absolute desktop
-    /// coordinates). Returns `.zero` when either input is empty.
+    /// coordinates), keeping it on the display.
+    ///
+    /// An axis larger than `visibleFrame` cannot be centered — the toolbar's
+    /// minimum width can exceed a small display — so it is pinned to the
+    /// visible origin instead of overhanging both edges. AppKit would clamp it
+    /// anyway; doing it here keeps the frame we compute and the frame we get
+    /// the same. Returns `.zero` when either input is empty.
     public static func centeredFrame(size: CGSize, in visibleFrame: CGRect) -> CGRect {
         guard size.width > 0,
               size.height > 0,
@@ -82,10 +88,17 @@ public enum AnnotationEditorWindowGeometry {
         }
 
         return CGRect(
-            x: visibleFrame.midX - size.width / 2,
-            y: visibleFrame.midY - size.height / 2,
+            x: onscreenOrigin(length: size.width, lower: visibleFrame.minX, upper: visibleFrame.maxX),
+            y: onscreenOrigin(length: size.height, lower: visibleFrame.minY, upper: visibleFrame.maxY),
             width: size.width,
             height: size.height
         )
+    }
+
+    private static func onscreenOrigin(length: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {
+        let centered = (lower + upper) / 2 - length / 2
+        let maxOrigin = upper - length
+        guard maxOrigin > lower else { return lower }
+        return min(max(centered, lower), maxOrigin)
     }
 }

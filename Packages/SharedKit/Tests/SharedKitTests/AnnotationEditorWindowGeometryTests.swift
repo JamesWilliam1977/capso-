@@ -135,6 +135,20 @@ struct AnnotationEditorWindowGeometryTests {
         #expect(frame == CGRect(x: 500, y: 300, width: 400, height: 300))
     }
 
+    @Test("Pins a frame wider than the display to the visible origin")
+    func oversizedFrameIsPinnedOnscreen() {
+        let frame = AnnotationEditorWindowGeometry.centeredFrame(
+            size: CGSize(width: 1349, height: 538),
+            in: CGRect(x: 0, y: 62, width: 1024, height: 681)
+        )
+
+        // Centering would put it at x = -162.5, hanging off both edges; the
+        // toolbar's left-hand tools matter more than symmetry here.
+        #expect(frame.origin.x == 0)
+        #expect(frame.origin.y == 133.5)
+        #expect(frame.width == 1349)
+    }
+
     @Test("Rejects invalid geometry")
     func invalidGeometry() {
         #expect(
