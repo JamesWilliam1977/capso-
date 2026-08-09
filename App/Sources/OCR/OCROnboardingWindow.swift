@@ -6,6 +6,8 @@ import SwiftUI
 final class OCROnboardingWindow: NSPanel {
     private var onDismissAction: (() -> Void)?
 
+    var onClose: (() -> Void)?
+
     init(onDismiss: @escaping () -> Void) {
         self.onDismissAction = onDismiss
 
@@ -34,6 +36,7 @@ final class OCROnboardingWindow: NSPanel {
     }
 
     override func close() {
+        onClose?()
         super.close()
     }
 }

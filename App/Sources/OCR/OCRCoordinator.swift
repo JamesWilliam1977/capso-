@@ -156,9 +156,11 @@ final class OCRCoordinator {
         onboardingWindow = OCROnboardingWindow(onDismiss: { [weak self] in
             self?.settings.ocrOnboardingShown = true
             self?.onboardingWindow?.close()
-            self?.onboardingWindow = nil
             action()
         })
+        onboardingWindow?.onClose = { [weak self] in
+            self?.onboardingWindow = nil
+        }
         onboardingWindow?.show()
     }
 
