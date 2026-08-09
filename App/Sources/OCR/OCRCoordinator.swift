@@ -153,6 +153,10 @@ final class OCRCoordinator {
     // MARK: - Onboarding
 
     private func showOnboarding(then action: @escaping () -> Void) {
+        // Tear down any existing panel first (same pattern as showOCROverlay):
+        // re-triggering OCR while onboarding is still open would otherwise
+        // orphan the old panel with its repeatForever animations running.
+        onboardingWindow?.close()
         onboardingWindow = OCROnboardingWindow(onDismiss: { [weak self] in
             self?.settings.ocrOnboardingShown = true
             self?.onboardingWindow?.close()
