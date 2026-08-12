@@ -18,7 +18,7 @@ struct ImageFileReaderTests {
 
     @Test("accepts image extensions case-insensitively")
     func isSupportedAcceptsImageExtensionsCaseInsensitively() {
-        for name in ["b.PNG", "b.jpg", "b.jpeg", "b.heic", "b.tif", "b.tiff", "b.gif"] {
+        for name in ["b.PNG", "b.jpg", "b.jpeg", "b.heic", "b.heif", "b.tif", "b.tiff", "b.gif"] {
             let url = URL(fileURLWithPath: "/tmp/\(name)")
             #expect(ImageFileReader.isSupported(url), "expected \(name) to be supported")
         }
@@ -108,6 +108,32 @@ struct ImageFileReaderTests {
         context.setFillColor(CGColor(red: 0.5, green: 0.5, blue: 0.1, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         return try #require(context.makeImage())
+    }
+
+    /// Overwriting an opened image reuses its own extension, so a readable format Capso
+    /// cannot write would produce bytes that disagree with the file name.
+    @Test("Every readable format can also be written")
+    func everyReadableFormatIsWritable() throws {
+        let image = try makeImage(width: 8, height: 8)
+
+        for type in ImageFileReader.supportedContentTypes {
+            let ext = try #require(type.preferredFilenameExtension)
+            let url = URL(fileURLWithPath: "/tmp/capso-invariant.\(ext)")
+
+            guard let data = ImageFileWriter.data(from: image, matchingFormatOf: url) else {
+                // Absent codec, as on Intel Macs without HEVC.
+                continue
+            }
+            let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+            let written = try #require(CGImageSourceGetType(source) as String?)
+            let writtenType = try #require(UTType(written))
+
+            if ext == "heif" {
+                #expect(writtenType == .heic, "\(ext) was written as \(written)")
+            } else {
+                #expect(writtenType.conforms(to: type), "\(ext) was written as \(written)")
+            }
+        }
     }
 
     private func writeImage(_ cgImage: CGImage, extension ext: String, using type: NSBitmapImageRep.FileType) throws -> URL {
