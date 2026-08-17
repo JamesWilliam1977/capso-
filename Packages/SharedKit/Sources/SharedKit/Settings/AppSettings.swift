@@ -158,59 +158,120 @@ public enum TranslationAutoDismiss: String, CaseIterable, Sendable {
 public enum TranslationProviderKind: String, CaseIterable, Sendable {
     case apple
     case openAICompatible
+    case deepSeek
+    case openRouter
     case deepL
+    case googleCloud
     case custom
 
     public var displayName: String {
-        switch self {
-        case .apple: return "Apple Translation"
-        case .openAICompatible: return "OpenAI"
-        case .deepL: return "DeepL"
-        case .custom: return "Custom"
-        }
+        descriptor.displayName
     }
 
     public var defaultEndpoint: String {
-        switch self {
-        case .apple:
-            return ""
-        case .openAICompatible:
-            return "https://api.openai.com/v1/chat/completions"
-        case .deepL:
-            return ""
-        case .custom:
-            return ""
-        }
+        descriptor.defaultEndpoint
     }
 
     public var defaultModel: String {
-        switch self {
-        case .apple, .deepL:
-            return ""
-        case .openAICompatible:
-            return "gpt-4o-mini"
-        case .custom:
-            return ""
-        }
+        descriptor.defaultModel
     }
 
     public var requiresAPIKey: Bool {
-        self != .apple
+        descriptor.showsAPIKey
     }
 
     public var supportsModel: Bool {
-        switch self {
-        case .apple, .deepL: return false
-        case .openAICompatible, .custom: return true
-        }
+        descriptor.supportsModel
     }
 
     public var supportsEndpoint: Bool {
+        descriptor.supportsEndpoint
+    }
+
+    public var supportsStreaming: Bool {
+        descriptor.supportsStreaming
+    }
+
+    public var connectionSummary: String {
+        descriptor.connectionSummary
+    }
+
+    private var descriptor: TranslationProviderDescriptor {
         switch self {
-        case .apple: return false
-        case .openAICompatible, .deepL, .custom: return true
+        case .apple:
+            return TranslationProviderDescriptor(
+                displayName: "Apple Translation",
+                connectionSummary: "On-device · High-fidelity when available"
+            )
+        case .openAICompatible:
+            return TranslationProviderDescriptor(
+                displayName: "OpenAI",
+                defaultEndpoint: "https://api.openai.com/v1/chat/completions",
+                defaultModel: "gpt-4o-mini",
+                showsAPIKey: true,
+                supportsModel: true,
+                supportsEndpoint: true,
+                supportsStreaming: true,
+                connectionSummary: "Cloud API · Streaming"
+            )
+        case .deepSeek:
+            return TranslationProviderDescriptor(
+                displayName: "DeepSeek",
+                defaultEndpoint: "https://api.deepseek.com/chat/completions",
+                defaultModel: "deepseek-v4-flash",
+                showsAPIKey: true,
+                supportsModel: true,
+                supportsEndpoint: true,
+                supportsStreaming: true,
+                connectionSummary: "Cloud API · Streaming"
+            )
+        case .openRouter:
+            return TranslationProviderDescriptor(
+                displayName: "OpenRouter",
+                defaultEndpoint: "https://openrouter.ai/api/v1/chat/completions",
+                defaultModel: "openrouter/auto",
+                showsAPIKey: true,
+                supportsModel: true,
+                supportsEndpoint: true,
+                supportsStreaming: true,
+                connectionSummary: "Cloud API · Streaming"
+            )
+        case .deepL:
+            return TranslationProviderDescriptor(
+                displayName: "DeepL",
+                showsAPIKey: true,
+                supportsEndpoint: true,
+                connectionSummary: "Cloud API · Complete response"
+            )
+        case .googleCloud:
+            return TranslationProviderDescriptor(
+                displayName: "Google Cloud",
+                defaultEndpoint: "https://translation.googleapis.com/language/translate/v2",
+                showsAPIKey: true,
+                supportsEndpoint: true,
+                connectionSummary: "Cloud API · Complete response"
+            )
+        case .custom:
+            return TranslationProviderDescriptor(
+                displayName: "Custom",
+                showsAPIKey: true,
+                supportsModel: true,
+                supportsEndpoint: true,
+                connectionSummary: "Configured endpoint · Complete response"
+            )
         }
     }
+}
+
+private struct TranslationProviderDescriptor {
+    let displayName: String
+    var defaultEndpoint = ""
+    var defaultModel = ""
+    var showsAPIKey = false
+    var supportsModel = false
+    var supportsEndpoint = false
+    var supportsStreaming = false
+    let connectionSummary: String
 }
 
 public enum ExportQuality: String, CaseIterable, Sendable {
@@ -924,17 +985,51 @@ public final class AppSettings: @unchecked Sendable {
                   let provider = TranslationProviderKind(rawValue: raw) else { return .apple }
             return provider
         }
-        set { defaults.set(newValue.rawValue, forKey: "translationProvider") }
+        set {
+            migrateLegacyTranslationProviderSettingsIfNeeded()
+            defaults.set(newValue.rawValue, forKey: "translationProvider")
+        }
     }
 
     public var translationProviderModel: String {
-        get { defaults.string(forKey: "translationProviderModel") ?? translationProvider.defaultModel }
-        set { defaults.set(newValue, forKey: "translationProviderModel") }
+        get {
+            migrateLegacyTranslationProviderSettingsIfNeeded()
+            return defaults.string(forKey: translationProviderSettingKey("model"))
+                ?? translationProvider.defaultModel
+        }
+        set {
+            migrateLegacyTranslationProviderSettingsIfNeeded()
+            defaults.set(newValue, forKey: translationProviderSettingKey("model"))
+        }
     }
 
     public var translationProviderEndpoint: String {
-        get { defaults.string(forKey: "translationProviderEndpoint") ?? translationProvider.defaultEndpoint }
-        set { defaults.set(newValue, forKey: "translationProviderEndpoint") }
+        get {
+            migrateLegacyTranslationProviderSettingsIfNeeded()
+            return defaults.string(forKey: translationProviderSettingKey("endpoint"))
+                ?? translationProvider.defaultEndpoint
+        }
+        set {
+            migrateLegacyTranslationProviderSettingsIfNeeded()
+            defaults.set(newValue, forKey: translationProviderSettingKey("endpoint"))
+        }
+    }
+
+    private func translationProviderSettingKey(_ field: String) -> String {
+        "translationProvider.\(translationProvider.rawValue).\(field)"
+    }
+
+    private func migrateLegacyTranslationProviderSettingsIfNeeded() {
+        let migrationKey = "translationProviderSettingsMigrated"
+        guard !defaults.bool(forKey: migrationKey) else { return }
+
+        if let model = defaults.string(forKey: "translationProviderModel") {
+            defaults.set(model, forKey: translationProviderSettingKey("model"))
+        }
+        if let endpoint = defaults.string(forKey: "translationProviderEndpoint") {
+            defaults.set(endpoint, forKey: translationProviderSettingKey("endpoint"))
+        }
+        defaults.set(true, forKey: migrationKey)
     }
 
     public var translationAutoCopy: Bool {

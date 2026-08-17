@@ -3,6 +3,32 @@ import AppKit
 import CaptureKit
 import SharedKit
 
+enum CaptureOverlayShortcutAction: Equatable {
+    case selectArea
+    case selectWindow
+    case selectFullScreen
+    case reuseLastArea
+
+    init?(keyCode: UInt16) {
+        switch keyCode {
+        case 0: self = .selectArea
+        case 13: self = .selectWindow
+        case 3: self = .selectFullScreen
+        case 15: self = .reuseLastArea
+        default: return nil
+        }
+    }
+
+    init?(event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard !event.isARepeat,
+              modifiers.intersection([.command, .option, .control]).isEmpty else {
+            return nil
+        }
+        self.init(keyCode: event.keyCode)
+    }
+}
+
 @MainActor
 final class CaptureOverlayWindow: NSPanel {
     var onAreaSelected: ((CGRect, NSScreen) -> Void)?
@@ -10,6 +36,7 @@ final class CaptureOverlayWindow: NSPanel {
     var onWindowsSelected: (([CGWindowID]) -> Void)?
     var onCancelled: (() -> Void)?
     var onSpaceToggle: (() -> Void)?
+    var onShortcutAction: ((CaptureOverlayShortcutAction) -> Void)?
 
     private let settings: AppSettings
     private let handlesGlobalKeyEvents: Bool
@@ -169,7 +196,9 @@ final class CaptureOverlayWindow: NSPanel {
         case 49:
             overlayView.requestSpaceToggle()
         default:
-            break
+            if let action = CaptureOverlayShortcutAction(event: event) {
+                onShortcutAction?(action)
+            }
         }
     }
 
@@ -192,7 +221,12 @@ final class CaptureOverlayWindow: NSPanel {
             overlayView.requestSpaceToggle()
             return nil
         default:
-            return event
+            guard let action = CaptureOverlayShortcutAction(event: event),
+                  onShortcutAction != nil else {
+                return event
+            }
+            onShortcutAction?(action)
+            return nil
         }
     }
 

@@ -43,6 +43,8 @@ final class RecordingCoordinator {
     var historyCoordinator: HistoryCoordinator?
 
     private var overlayWindows: [CaptureOverlayWindow] = []
+    private var selectionModeWindow: RecordingSelectionModeWindow?
+    private var windowSelectionTask: Task<Void, Never>?
     private var toolbarWindow: RecordingToolbarWindow?
     private var selectionBorderWindow: SelectionBorderWindow?
     private var controlsWindow: RecordingControlsWindow?
@@ -68,6 +70,7 @@ final class RecordingCoordinator {
     private var selectedScreen: NSScreen?
     private var selectedDisplayID: CGDirectDisplayID = CGMainDisplayID()
     private var selectedTarget: RecordingTarget?
+    private var activeSelectionMode: RecordingSelectionMode?
 
     // Current recording inputs (used by restart)
     private var currentRecordingFormat: RecordingFormatChoice?
@@ -102,36 +105,48 @@ final class RecordingCoordinator {
     // MARK: - Step 1: Area Selection
 
     private func showAreaSelectionOverlay() {
-        presentSelectionOverlay(mode: .area) { [weak self] in
+        windowSelectionTask?.cancel()
+        presentSelectionOverlay(mode: .area, selectedMode: .area) { [weak self] in
             self?.requestWindowSelectionOverlay()
         }
     }
 
     private func requestWindowSelectionOverlay() {
-        Task {
+        windowSelectionTask?.cancel()
+        let fallbackMode = Self.windowEnumerationFallbackMode(activeMode: activeSelectionMode)
+        windowSelectionTask = Task { [weak self] in
+            guard let self else { return }
             let overlayIDs = Set(overlayWindows.map { CGWindowID($0.windowNumber) })
             do {
                 let windows = try await ContentEnumerator.windows()
                     .filter { !overlayIDs.contains($0.id) }
-                guard !windows.isEmpty else { return }
+                guard !Task.isCancelled else { return }
+                guard !windows.isEmpty else {
+                    selectionModeWindow?.setSelectedMode(fallbackMode)
+                    return
+                }
                 showWindowSelectionOverlay(windows: windows)
             } catch {
+                guard !Task.isCancelled else { return }
+                selectionModeWindow?.setSelectedMode(fallbackMode)
                 print("Window enumeration failed: \(error)")
             }
         }
     }
 
     private func showWindowSelectionOverlay(windows: [WindowInfo]) {
-        presentSelectionOverlay(mode: .windowSelection(windows)) { [weak self] in
+        presentSelectionOverlay(mode: .windowSelection(windows), selectedMode: .window) { [weak self] in
             self?.showAreaSelectionOverlay()
         }
     }
 
     private func presentSelectionOverlay(
         mode: CaptureOverlayMode,
+        selectedMode: RecordingSelectionMode,
         onSpaceToggle: @escaping () -> Void
     ) {
         dismissOverlay()
+        activeSelectionMode = selectedMode
 
         for screen in NSScreen.screens {
             let overlay = CaptureOverlayWindow(
@@ -154,16 +169,24 @@ final class RecordingCoordinator {
                 self?.selectedTarget = nil
             }
             overlay.onSpaceToggle = onSpaceToggle
+            overlay.onShortcutAction = { [weak self] action in
+                self?.handleRecordingModeRequest(RecordingSelectionMode(action: action))
+            }
             overlay.activate(mode: mode)
             overlayWindows.append(overlay)
         }
+
+        showSelectionModeWindow(selectedMode: selectedMode)
     }
 
     private func showRememberedRecordingArea() -> Bool {
-        guard settings.rememberLastRecordingArea,
-              let selection = settings.lastRecordingArea else {
-            return false
-        }
+        guard settings.rememberLastRecordingArea else { return false }
+        return selectLastRecordingArea()
+    }
+
+    @discardableResult
+    private func selectLastRecordingArea() -> Bool {
+        guard let selection = settings.lastRecordingArea else { return false }
 
         guard case let .area(x, y, width, height, screenID) = selection,
               width > 5,
@@ -184,10 +207,87 @@ final class RecordingCoordinator {
         return true
     }
 
-    private func handleAreaSelected(rect: CGRect, screen: NSScreen) {
+    private var canUseLastRecordingArea: Bool {
+        guard let selection = settings.lastRecordingArea,
+              case let .area(_, _, width, height, screenID) = selection else {
+            return false
+        }
+        return width > 5
+            && height > 5
+            && NSScreen.screens.contains(where: { $0.displayID == screenID })
+    }
+
+    private func handleRecordingModeRequest(_ mode: RecordingSelectionMode) {
+        switch mode {
+        case .area:
+            showAreaSelectionOverlay()
+        case .window:
+            requestWindowSelectionOverlay()
+        case .fullScreen:
+            selectFullScreenForRecording()
+        case .lastArea:
+            if !selectLastRecordingArea() {
+                NSSound.beep()
+            }
+        }
+    }
+
+    private func selectFullScreenForRecording() {
+        guard let screen = screenUnderPointer else {
+            return
+        }
+
+        dismissOverlay()
+        dismissToolbarUI()
+        handleAreaSelected(
+            rect: CGRect(origin: .zero, size: screen.frame.size),
+            screen: screen,
+            storesAsLastArea: false
+        )
+    }
+
+    private func showSelectionModeWindow(selectedMode: RecordingSelectionMode) {
+        guard let screen = screenUnderPointer else {
+            return
+        }
+
+        let window = RecordingSelectionModeWindow(
+            screen: screen,
+            selectedMode: selectedMode,
+            canUseLastArea: canUseLastRecordingArea,
+            onSelect: { [weak self] mode in
+                self?.handleRecordingModeRequest(mode)
+            },
+            onCancel: { [weak self] in
+                self?.dismissOverlay()
+                self?.selectedTarget = nil
+            }
+        )
+        window.show()
+        selectionModeWindow = window
+    }
+
+    private var screenUnderPointer: NSScreen? {
+        let location = NSEvent.mouseLocation
+        return NSScreen.screens.first(where: { $0.frame.contains(location) })
+            ?? NSScreen.main
+            ?? NSScreen.screens.first
+    }
+
+    static func windowEnumerationFallbackMode(
+        activeMode: RecordingSelectionMode?
+    ) -> RecordingSelectionMode {
+        activeMode ?? .area
+    }
+
+    private func handleAreaSelected(
+        rect: CGRect,
+        screen: NSScreen,
+        storesAsLastArea: Bool = true
+    ) {
         selectedScreen = screen
         selectedDisplayID = screen.displayID
-        if settings.rememberLastRecordingArea {
+        if storesAsLastArea {
             settings.lastRecordingArea = .area(rect: rect, screenID: screen.displayID)
         }
 
@@ -862,10 +962,15 @@ final class RecordingCoordinator {
     // MARK: - UI Helpers
 
     private func dismissOverlay() {
+        windowSelectionTask?.cancel()
+        windowSelectionTask = nil
         for window in overlayWindows {
             window.deactivate()
         }
         overlayWindows.removeAll()
+        selectionModeWindow?.close()
+        selectionModeWindow = nil
+        activeSelectionMode = nil
     }
 
     private func startClickHighlight() {

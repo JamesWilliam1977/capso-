@@ -17,93 +17,14 @@ struct TranslationResultView: View {
     let onClose: () -> Void
     let onPinChanged: (Bool) -> Void
     let onChangeLanguage: () -> Void
+    let onTranslationCompleted: () -> Void
+    let height: CGFloat
 
     enum Phase {
         case loading
+        case streaming(TranslatedRegion)
         case done([TranslatedRegion])
         case failed(String)
-    }
-
-    private enum TextBlock {
-        case paragraph(String)
-        case bulletList([String])
-        case numberedList([NumberedItem])
-    }
-
-    private struct NumberedItem {
-        let number: Int
-        let text: String
-    }
-
-    private static func parseBlocks(_ text: String) -> [TextBlock] {
-        let rawLines = text.components(separatedBy: CharacterSet.newlines)
-        let lines = rawLines.map { $0.trimmingCharacters(in: .whitespaces) }
-
-        var blocks: [TextBlock] = []
-        var pendingBullets: [String] = []
-        var pendingNumbers: [NumberedItem] = []
-        var pendingParagraphLines: [String] = []
-
-        func flushBullets() {
-            if !pendingBullets.isEmpty {
-                blocks.append(.bulletList(pendingBullets))
-                pendingBullets = []
-            }
-        }
-        func flushNumbers() {
-            if !pendingNumbers.isEmpty {
-                blocks.append(.numberedList(pendingNumbers))
-                pendingNumbers = []
-            }
-        }
-        func flushParagraph() {
-            if !pendingParagraphLines.isEmpty {
-                let joined = pendingParagraphLines.joined(separator: " ")
-                if !joined.trimmingCharacters(in: .whitespaces).isEmpty {
-                    blocks.append(.paragraph(joined))
-                }
-                pendingParagraphLines = []
-            }
-        }
-        func flushAll() {
-            flushBullets()
-            flushNumbers()
-            flushParagraph()
-        }
-
-        let bulletPattern = try! NSRegularExpression(pattern: "^[•\\-\\*]\\s*", options: [])
-        let numberPattern = try! NSRegularExpression(pattern: "^(\\d+)[\\.、]\\s*", options: [])
-
-        for line in lines {
-            if line.isEmpty {
-                flushAll()
-                continue
-            }
-            let range = NSRange(line.startIndex..., in: line)
-            if let m = bulletPattern.firstMatch(in: line, options: [], range: range) {
-                flushNumbers()
-                flushParagraph()
-                let rest = (line as NSString).substring(from: m.range.upperBound)
-                pendingBullets.append(rest)
-                continue
-            }
-            if let m = numberPattern.firstMatch(in: line, options: [], range: range) {
-                flushBullets()
-                flushParagraph()
-                let numberRange = m.range(at: 1)
-                let numberText = (line as NSString).substring(with: numberRange)
-                let number = Int(numberText) ?? (pendingNumbers.count + 1)
-                let rest = (line as NSString).substring(from: m.range.upperBound)
-                pendingNumbers.append(NumberedItem(number: number, text: rest))
-                continue
-            }
-            // Plain line → accumulate into paragraph (wrapping soft-wraps into one paragraph)
-            flushBullets()
-            flushNumbers()
-            pendingParagraphLines.append(line)
-        }
-        flushAll()
-        return blocks
     }
 
     @State private var phase: Phase = .loading
@@ -111,6 +32,8 @@ struct TranslationResultView: View {
     @State private var originalExpanded: Bool = false
     @State private var isPinned: Bool = false
     @State private var manualCopyShown: Bool = false
+    @State private var providerTask: Task<Void, Never>?
+    @State private var completionReported: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -125,7 +48,7 @@ struct TranslationResultView: View {
 
             footer(copiedMessage: shouldShowCopied ? "Copied" : nil)
         }
-        .frame(width: 360, height: 480)
+        .frame(width: 420, height: height)
         .background(hiddenEscape)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -134,6 +57,7 @@ struct TranslationResultView: View {
                 .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
         )
         .onAppear { startTranslation() }
+        .onDisappear { providerTask?.cancel() }
         .translationTask(runConfig) { session in
             await runTranslation(using: session)
         }
@@ -155,8 +79,10 @@ struct TranslationResultView: View {
             .padding(.vertical, 36)
         case .done(let regions):
             doneSections(region: regions.first)
+        case .streaming(let region):
+            streamingSection(region: region)
         case .failed(let message):
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(.orange)
@@ -165,9 +91,17 @@ struct TranslationResultView: View {
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 20)
+
+                HStack(spacing: 8) {
+                    Button("Retry", action: retryTranslation)
+                        .buttonStyle(.borderedProminent)
+                    Button("Open Settings", action: openTranslationSettings)
+                        .buttonStyle(.bordered)
+                }
+                .controlSize(.small)
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
         }
     }
 
@@ -233,6 +167,29 @@ struct TranslationResultView: View {
         }
     }
 
+    private func streamingSection(region: TranslatedRegion) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionLabel("TRANSLATION")
+            Text(region.translation)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineSpacing(3)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.mini)
+                Text("Translating…")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 12)
+        }
+    }
+
     @ViewBuilder
     private func renderedText<BC: ShapeStyle, MC: ShapeStyle>(
         _ text: String,
@@ -240,7 +197,7 @@ struct TranslationResultView: View {
         bodyColor: BC,
         markerColor: MC
     ) -> some View {
-        let blocks = Self.parseBlocks(text)
+        let blocks = TranslationTextBlockParser.parse(text)
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 switch block {
@@ -387,6 +344,9 @@ struct TranslationResultView: View {
         if case .done(let regions) = phase {
             return regions.first?.detectedSource.languageCode?.identifier
         }
+        if case .streaming(let region) = phase {
+            return region.detectedSource.languageCode?.identifier
+        }
         return nil
     }
 
@@ -403,7 +363,7 @@ struct TranslationResultView: View {
     // MARK: - Logic
 
     private func buildConfig() {
-        let combined = regions.map(\.text).joined(separator: "\n")
+        let combined = sourceText
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(combined)
         let detected = recognizer.dominantLanguage?.rawValue
@@ -419,20 +379,61 @@ struct TranslationResultView: View {
             return
         }
 
+        let sourceLanguage = detected.map { Locale.Language(identifier: $0) }
+        let targetLanguage = Locale.Language(identifier: target)
+#if compiler(>=6.2)
+        if #available(macOS 26.4, *) {
+            runConfig = TranslationSession.Configuration(
+                source: sourceLanguage,
+                target: targetLanguage,
+                preferredStrategy: .highFidelity
+            )
+            return
+        }
+#endif
         runConfig = TranslationSession.Configuration(
-            source: detected.map { Locale.Language(identifier: $0) },
-            target: Locale.Language(identifier: target)
+            source: sourceLanguage,
+            target: targetLanguage
         )
     }
 
     private func startTranslation() {
-        originalExpanded = showOriginal
+        originalExpanded = false
         guard provider == .apple else {
             runConfig = nil
-            Task { await runProviderTranslation() }
+            providerTask?.cancel()
+            providerTask = Task { await runProviderTranslation() }
             return
         }
         buildConfig()
+    }
+
+    private func retryTranslation() {
+        providerTask?.cancel()
+        manualCopyShown = false
+        completionReported = false
+        phase = .loading
+
+        if provider == .apple {
+            runConfig = nil
+            Task { @MainActor in
+                await Task.yield()
+                buildConfig()
+            }
+        } else {
+            providerTask = Task { await runProviderTranslation() }
+        }
+    }
+
+    private func openTranslationSettings() {
+        NotificationCenter.default.post(name: .openPreferencesTab, object: PreferencesTab.ocr)
+    }
+
+    private func finishTranslation(with result: TranslatedRegion) {
+        phase = .done([result])
+        guard !completionReported else { return }
+        completionReported = true
+        onTranslationCompleted()
     }
 
     /// Normalizes codes for comparison (e.g. NLLanguageRecognizer returns
@@ -442,16 +443,22 @@ struct TranslationResultView: View {
         code.lowercased()
     }
 
-    private func runTranslation(using session: TranslationSession) async {
-        let meaningful = regions.filter {
-            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    static func visibleFailureMessage(for error: Error) -> String? {
+        if error is CancellationError {
+            return nil
         }
-        guard !meaningful.isEmpty else {
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return nil
+        }
+        return error.localizedDescription
+    }
+
+    private func runTranslation(using session: TranslationSession) async {
+        let joinedOriginal = sourceText
+        guard !joinedOriginal.isEmpty else {
             phase = .failed("No text to translate")
             return
         }
-
-        let joinedOriginal = meaningful.map(\.text).joined(separator: "\n")
 
         nonisolated(unsafe) let s = session
         do {
@@ -478,7 +485,7 @@ struct TranslationResultView: View {
 
             let merged = TextRegion(
                 text: joinedOriginal,
-                boundingBox: meaningful.first?.boundingBox ?? .zero,
+                boundingBox: firstMeaningfulRegion?.boundingBox ?? .zero,
                 confidence: 1.0
             )
             let result = TranslatedRegion(
@@ -486,30 +493,42 @@ struct TranslationResultView: View {
                 translation: response.targetText,
                 detectedSource: Locale.Language(identifier: detectedSource.isEmpty ? "en" : detectedSource)
             )
-            phase = .done([result])
+            finishTranslation(with: result)
         } catch {
-            phase = .failed(error.localizedDescription)
+            if let message = Self.visibleFailureMessage(for: error) {
+                phase = .failed(message)
+            }
         }
     }
 
     private func runProviderTranslation() async {
-        let meaningful = regions.filter {
-            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
-        guard !meaningful.isEmpty else {
+        let joinedOriginal = sourceText
+        guard !joinedOriginal.isEmpty else {
             phase = .failed("No text to translate")
             return
         }
-
-        let joinedOriginal = meaningful.map(\.text).joined(separator: "\n")
+        let merged = TextRegion(
+            text: joinedOriginal,
+            boundingBox: firstMeaningfulRegion?.boundingBox ?? .zero,
+            confidence: 1.0
+        )
         do {
-            let response = try await ProviderTranslationService.translate(
+            var response: ProviderTranslationResult?
+            for try await update in ProviderTranslationService.translationUpdates(
                 text: joinedOriginal,
                 target: target,
                 provider: provider,
                 config: providerConfig
-            )
-            guard !response.text.isEmpty else {
+            ) {
+                try Task.checkCancellation()
+                response = update
+                phase = .streaming(TranslatedRegion(
+                    original: merged,
+                    translation: update.text,
+                    detectedSource: Locale.Language(identifier: update.detectedSource ?? "und")
+                ))
+            }
+            guard let response, !response.text.isEmpty else {
                 phase = .failed("Translation returned no results. Try changing the target language.")
                 return
             }
@@ -520,25 +539,41 @@ struct TranslationResultView: View {
                 pb.setString(response.text, forType: .string)
             }
 
-            let merged = TextRegion(
-                text: joinedOriginal,
-                boundingBox: meaningful.first?.boundingBox ?? .zero,
-                confidence: 1.0
-            )
             let result = TranslatedRegion(
                 original: merged,
                 translation: response.text,
                 detectedSource: Locale.Language(identifier: response.detectedSource ?? "und")
             )
-            phase = .done([result])
+            finishTranslation(with: result)
         } catch {
-            phase = .failed(error.localizedDescription)
+            if let message = Self.visibleFailureMessage(for: error) {
+                phase = .failed(message)
+            }
         }
     }
 
     private func copyCurrent() {
-        guard case .done(let regions) = phase, let region = regions.first else { return }
-        copyText(region.translation)
+        switch phase {
+        case .streaming(let region):
+            copyText(region.translation)
+        case .done(let regions):
+            guard let region = regions.first else { return }
+            copyText(region.translation)
+        case .loading, .failed:
+            return
+        }
+    }
+
+    private var sourceText: String {
+        TranslationTextLayout.compose(regions.map {
+            TranslationTextLine(text: $0.text, frame: $0.boundingBox)
+        })
+    }
+
+    private var firstMeaningfulRegion: TextRegion? {
+        regions.first {
+            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     private func copyText(_ text: String) {
