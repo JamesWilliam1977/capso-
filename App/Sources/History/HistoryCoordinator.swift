@@ -51,6 +51,20 @@ final class HistoryCoordinator {
         window.show()
     }
 
+    func toggleWindow() {
+        if let historyWindow {
+            historyWindow.toggle()
+            return
+        }
+        showWindow()
+    }
+
+#if DEBUG
+    var isWindowVisibleForTesting: Bool {
+        historyWindow?.isVisibleForTesting == true
+    }
+#endif
+
     // MARK: - Data Loading
 
     func loadEntries() {

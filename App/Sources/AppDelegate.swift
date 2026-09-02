@@ -174,7 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.captureCoordinator?.replayLastCapture()
         }
         KeyboardShortcuts.onKeyDown(for: .screenshotHistory) { [weak self] in
-            self?.historyCoordinator?.showWindow()
+            self?.historyCoordinator?.toggleWindow()
         }
         KeyboardShortcuts.onKeyDown(for: .captureAndTranslate) { [weak self] in
             guard let self else { return }
