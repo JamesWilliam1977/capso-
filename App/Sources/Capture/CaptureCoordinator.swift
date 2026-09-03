@@ -867,9 +867,17 @@ final class CaptureCoordinator {
         mode: CaptureOverlayMode = .area,
         areaSelected: ((CGRect, NSScreen) -> Void)? = nil
     ) {
-        dismissOverlay()
+        // Starting a replacement overlay is not the end of capture. In
+        // particular, posting `capsoCaptureDidEnd` here would briefly resume a
+        // parked discard alert before the next freeze parks it again.
+        dismissOverlay(notifyingCaptureEnd: false)
 
         let frozenScreens = captureFrozenScreens()
+        // Freeze first so an open system alert remains visible in the image
+        // being selected. Only then end its modal event loop, which releases
+        // pointer events for the overlay without removing the alert from the
+        // already-frozen desktop.
+        NotificationCenter.default.post(name: .capsoCaptureDidFreezeDesktop, object: nil)
         guard !frozenScreens.isEmpty else {
             showOverlay(mode: mode, areaSelected: areaSelected)
             return
@@ -1162,10 +1170,13 @@ final class CaptureCoordinator {
         return ciCtx.createCGImage(ci, from: CGRect(origin: .zero, size: targetSize))
     }
 
-    private func dismissOverlay() {
+    private func dismissOverlay(notifyingCaptureEnd: Bool = true) {
         isSelectionFlowStarting = false
         dismissSelectionOverlays()
         dismissFreezeWindows()
+        if notifyingCaptureEnd {
+            NotificationCenter.default.post(name: .capsoCaptureDidEnd, object: nil)
+        }
     }
 
     private func dismissSelectionOverlays() {
